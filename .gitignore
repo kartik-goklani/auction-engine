@@ -1,0 +1,105 @@
+# ── Root ────────────────────────────────────────────────
+.DS_Store
+CLAUDE.md
+ARCHITECTURE.md
+AGENTS.md
+.claude/mcp_settings.json
+
+# ── Backend (auction-backend/) ──────────────────────────
+# compiled output
+auction-backend/dist/
+auction-backend/node_modules/
+auction-backend/build/
+
+# Logs
+auction-backend/logs/
+auction-backend/*.log
+auction-backend/npm-debug.log*
+auction-backend/pnpm-debug.log*
+auction-backend/yarn-debug.log*
+auction-backend/yarn-error.log*
+auction-backend/lerna-debug.log*
+
+# Tests
+auction-backend/coverage/
+auction-backend/.nyc_output/
+
+# IDEs and editors
+auction-backend/.idea/
+auction-backend/.project
+auction-backend/.classpath
+auction-backend/.c9/
+auction-backend/*.launch
+auction-backend/.settings/
+auction-backend/*.sublime-workspace
+
+# IDE - VSCode
+auction-backend/.vscode/*
+!auction-backend/.vscode/settings.json
+!auction-backend/.vscode/tasks.json
+!auction-backend/.vscode/launch.json
+!auction-backend/.vscode/extensions.json
+
+# dotenv environment variable files
+auction-backend/.env
+auction-backend/.env.development.local
+auction-backend/.env.test.local
+auction-backend/.env.production.local
+auction-backend/.env.local
+
+# temp directory
+auction-backend/.temp
+auction-backend/.tmp
+
+# Runtime data
+auction-backend/pids/
+auction-backend/*.pid
+auction-backend/*.seed
+auction-backend/*.pid.lock
+
+# Diagnostic reports
+auction-backend/report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# ── Frontend (auction-frontend/) ────────────────────────
+# dependencies
+auction-frontend/node_modules/
+auction-frontend/.pnp
+auction-frontend/.pnp.*
+auction-frontend/.yarn/*
+!auction-frontend/.yarn/patches
+!auction-frontend/.yarn/plugins
+!auction-frontend/.yarn/releases
+!auction-frontend/.yarn/versions
+
+# testing
+auction-frontend/coverage/
+
+# next.js
+auction-frontend/.next/
+auction-frontend/out/
+
+# production
+auction-frontend/build/
+
+# misc
+auction-frontend/*.pem
+
+# debug
+auction-frontend/npm-debug.log*
+auction-frontend/yarn-debug.log*
+auction-frontend/yarn-error.log*
+auction-frontend/.pnpm-debug.log*
+
+# env files
+auction-frontend/.env
+auction-frontend/.env.development.local
+auction-frontend/.env.test.local
+auction-frontend/.env.production.local
+auction-frontend/.env.local
+
+# vercel
+auction-frontend/.vercel
+
+# typescript
+auction-frontend/*.tsbuildinfo
+auction-frontend/next-env.d.ts
