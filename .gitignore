@@ -1,5 +1,10 @@
 # ── Root ────────────────────────────────────────────────
 .DS_Store
+
+# ── Tests (tests/) ──────────────────────────────────────
+tests/.env.test
+tests/__pycache__/
+tests/.pytest_cache/
 CLAUDE.md
 ARCHITECTURE.md
 AGENTS.md
