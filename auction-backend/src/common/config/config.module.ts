@@ -1,0 +1,38 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule as NestConfigModule } from '@nestjs/config';
+import { z } from 'zod';
+
+const envSchema = z.object({
+  SUPABASE_URL: z.url(),
+  SUPABASE_ANON_KEY: z.string().min(1),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  SUPABASE_DB_URL: z.string().min(1),
+  OPENAI_API_KEY: z.string().min(1),
+  LANGCHAIN_TRACING_V2: z.enum(['true', 'false']).default('false'),
+  LANGCHAIN_API_KEY: z.string().min(1),
+  LANGCHAIN_PROJECT: z.string().min(1),
+  PORT: z.coerce.number().int().positive().default(3000),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  FRONTEND_URL: z.url().default('http://localhost:3001'),
+});
+
+function validate(config: Record<string, unknown>): Record<string, unknown> {
+  const result = envSchema.safeParse(config);
+  if (!result.success) {
+    const missing = result.error.issues
+      .map((i) => `  ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
+    throw new Error(`❌ Invalid environment configuration:\n${missing}`);
+  }
+  return result.data as Record<string, unknown>;
+}
+
+@Module({
+  imports: [
+    NestConfigModule.forRoot({
+      isGlobal: true,
+      validate,
+    }),
+  ],
+})
+export class ConfigModule {}
