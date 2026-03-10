@@ -45,6 +45,16 @@ export interface VendorWithPerformance extends VendorRow {
 export class VendorsRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  async findAuctionStatus(auctionId: string): Promise<string | null> {
+    const { data } = await this.db
+      .getClient()
+      .from('auctions')
+      .select('status')
+      .eq('id', auctionId)
+      .single();
+    return (data as { status: string } | null)?.status ?? null;
+  }
+
   async findAllApproved(): Promise<VendorRow[]> {
     const { data, error } = await this.db
       .getClient()
@@ -96,6 +106,17 @@ export class VendorsRepository {
       .single();
 
     return (data as VendorRow | null) ?? null;
+  }
+
+  async findUserIdByVendorId(vendorId: string): Promise<string | null> {
+    const { data } = await this.db
+      .getClient()
+      .from('vendors')
+      .select('user_id')
+      .eq('id', vendorId)
+      .single();
+
+    return (data as { user_id: string | null } | null)?.user_id ?? null;
   }
 
   async updateProfile(

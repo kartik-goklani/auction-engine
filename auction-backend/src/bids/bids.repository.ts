@@ -102,6 +102,28 @@ export class BidsRepository {
     return (data as BidRow | null) ?? null;
   }
 
+  async getTopAcceptedBids(
+    auctionId: string,
+    auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID',
+    limit: number,
+  ): Promise<BidRow[]> {
+    const ascending = auctionType !== 'FORWARD';
+    const { data, error } = await this.db
+      .getClient()
+      .from('bids')
+      .select('*')
+      .eq('auction_id', auctionId)
+      .eq('status', 'ACCEPTED')
+      .order('amount', { ascending })
+      .limit(limit);
+
+    if (error) {
+      throw new InternalServerErrorException('Failed to fetch top bids');
+    }
+
+    return (data ?? []) as BidRow[];
+  }
+
   async getAcceptedBidCount(auctionId: string): Promise<number> {
     const { count } = await this.db
       .getClient()

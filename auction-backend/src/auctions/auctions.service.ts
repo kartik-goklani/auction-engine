@@ -19,8 +19,10 @@ import {
   AuctionStatus,
   ActorType,
   NotificationType,
+  InvitationStatus,
 } from '../common/types';
 import type { CreateAuctionDto } from './dto/create-auction.dto';
+import type { UpdateAuctionDto } from './dto/update-auction.dto';
 import type { CreateLotDto } from './dto/create-lot.dto';
 
 /** Valid forward-only state transitions. CANCELLED is allowed from any state. */
@@ -44,6 +46,12 @@ export class AuctionsService {
   ) {}
 
   async create(buyerId: string, dto: CreateAuctionDto): Promise<AuctionRow> {
+    if (dto.startTime && new Date(dto.startTime) <= new Date()) {
+      throw new BadRequestException('Start time must be in the future');
+    }
+    if (dto.startTime && dto.endTime && new Date(dto.endTime) <= new Date(dto.startTime)) {
+      throw new BadRequestException('End time must be after start time');
+    }
     const auction = await this.auctionsRepository.create(buyerId, dto);
 
     this.auditService.log({
@@ -76,10 +84,97 @@ export class AuctionsService {
     return this.auctionsRepository.findById(id);
   }
 
+  // ── Field update (DRAFT / PUBLISHED only) ─────────────────────────────────
+
+  async update(id: string, buyerId: string, dto: UpdateAuctionDto): Promise<AuctionRow> {
+    const auction = await this.auctionsRepository.findById(id);
+    this.assertOwner(auction, buyerId);
+
+    if (
+      auction.status !== AuctionStatus.DRAFT &&
+      auction.status !== AuctionStatus.PUBLISHED
+    ) {
+      throw new UnprocessableEntityException(
+        'Auction fields can only be edited in DRAFT or PUBLISHED state',
+      );
+    }
+
+    // Build the patch — only include defined fields
+    const patch: Partial<Pick<AuctionRow,
+      'title' | 'description' | 'category' | 'start_time' | 'end_time' |
+      'ceiling_price' | 'reserve_price' | 'min_decrement' |
+      'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility'
+    >> = {};
+    if (dto.title            !== undefined) patch.title                = dto.title;
+    if (dto.description      !== undefined) patch.description          = dto.description;
+    if (dto.category         !== undefined) patch.category             = dto.category;
+    if (dto.startTime        !== undefined) patch.start_time           = dto.startTime;
+    if (dto.endTime          !== undefined) patch.end_time             = dto.endTime;
+    if (dto.ceilingPrice     !== undefined) patch.ceiling_price        = dto.ceilingPrice;
+    if (dto.reservePrice     !== undefined) patch.reserve_price        = dto.reservePrice;
+    if (dto.minDecrement     !== undefined) patch.min_decrement        = dto.minDecrement;
+    if (dto.autoExtendEnabled !== undefined) patch.auto_extend_enabled = dto.autoExtendEnabled;
+    if (dto.autoExtendMinutes !== undefined) patch.auto_extend_minutes = dto.autoExtendMinutes;
+    if (dto.autoExtendTrigger !== undefined) patch.auto_extend_trigger = dto.autoExtendTrigger;
+    if (dto.visibility       !== undefined) patch.visibility           = dto.visibility;
+
+    // Validate that effective end_time > effective start_time
+    const effectiveStart = patch.start_time ?? auction.start_time;
+    const effectiveEnd   = patch.end_time   ?? auction.end_time;
+    if (effectiveStart && new Date(effectiveStart) <= new Date()) {
+      throw new BadRequestException('Start time must be in the future');
+    }
+    if (effectiveStart && effectiveEnd && new Date(effectiveEnd) <= new Date(effectiveStart)) {
+      throw new BadRequestException('End time must be after start time');
+    }
+
+    const updated = await this.auctionsRepository.updateFields(id, patch);
+
+    this.auditService.log({
+      auctionId: id,
+      actorId: buyerId,
+      actorType: ActorType.BUYER,
+      action: 'AUCTION_UPDATED',
+      metadata: patch,
+    });
+
+    // Notify accepted vendors when a published auction is edited
+    if (auction.status === AuctionStatus.PUBLISHED) {
+      void this.notifyAcceptedVendors(id, auction.title);
+    }
+
+    return updated;
+  }
+
+  private async notifyAcceptedVendors(auctionId: string, auctionTitle: string): Promise<void> {
+    const invitations = await this.vendorsService.findInvitationsByAuction(auctionId);
+    for (const inv of invitations) {
+      if (inv.status !== InvitationStatus.ACCEPTED) continue;
+      const vendor = await this.vendorsService.findById(inv.vendor_id).catch(() => null);
+      if (vendor?.user_id) {
+        this.notificationsService.send(
+          vendor.user_id,
+          NotificationType.AUCTION_UPDATED,
+          'An auction you joined has been updated',
+          `"${auctionTitle}" has been updated by the buyer. Please review the changes.`,
+          { auctionId },
+        );
+      }
+    }
+  }
+
   // ── State transitions ─────────────────────────────────────────────────────
 
   async publish(id: string, buyerId: string): Promise<AuctionRow> {
-    return this.transition(id, buyerId, AuctionStatus.PUBLISHED, 'AUCTION_PUBLISHED');
+    const auction = await this.transition(id, buyerId, AuctionStatus.PUBLISHED, 'AUCTION_PUBLISHED');
+
+    // Non-blocking: vendor shortlist runs in background after publish
+    const categoryKeywords = auction.category
+      ? auction.category.split(/[,\s]+/).filter(Boolean)
+      : [];
+    void this.agentsService.runVendorShortlist(auction.id, categoryKeywords);
+
+    return auction;
   }
 
   async open(id: string, buyerId: string): Promise<AuctionRow> {
@@ -95,8 +190,21 @@ export class AuctionsService {
     return auction;
   }
 
-  async award(id: string, buyerId: string): Promise<AuctionRow> {
-    return this.transition(id, buyerId, AuctionStatus.AWARDED, 'AUCTION_AWARDED');
+  async award(id: string, buyerId: string, winningVendorId: string): Promise<AuctionRow> {
+    const auction = await this.auctionsRepository.findById(id);
+    this.assertOwner(auction, buyerId);
+    this.assertTransitionAllowed(auction.status, AuctionStatus.AWARDED);
+    const updated = await this.auctionsRepository.updateStatus(id, AuctionStatus.AWARDED, {
+      winning_vendor_id: winningVendorId,
+    });
+    void this.auditService.log({
+      auctionId: id,
+      actorId: buyerId,
+      actorType: ActorType.BUYER,
+      action: 'AUCTION_AWARDED',
+      metadata: { winning_vendor_id: winningVendorId },
+    });
+    return updated;
   }
 
   async cancel(id: string, buyerId: string, reason: string): Promise<AuctionRow> {
@@ -171,6 +279,45 @@ export class AuctionsService {
     }
 
     return this.auctionsRepository.updateLot(lotId, fields);
+  }
+
+  async delete(id: string, buyerId: string): Promise<void> {
+    const auction = await this.auctionsRepository.findById(id);
+    this.assertOwner(auction, buyerId);
+
+    const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1_000);
+    const isPublishedDeletable =
+      auction.status === AuctionStatus.PUBLISHED &&
+      auction.start_time != null &&
+      new Date(auction.start_time) > oneHourFromNow;
+
+    if (auction.status !== AuctionStatus.DRAFT && !isPublishedDeletable) {
+      throw new UnprocessableEntityException(
+        'Auctions can only be deleted when DRAFT, or PUBLISHED with start time more than 1 hour away',
+      );
+    }
+
+    await this.auctionsRepository.delete(id);
+
+    this.auditService.log({
+      auctionId: id,
+      actorId: buyerId,
+      actorType: ActorType.BUYER,
+      action: 'AUCTION_DELETED',
+    });
+  }
+
+  async extendByMinutes(id: string, buyerId: string, minutes: number): Promise<AuctionRow> {
+    const auction = await this.auctionsRepository.findById(id);
+    this.assertOwner(auction, buyerId);
+
+    if (auction.status !== AuctionStatus.OPEN) {
+      throw new UnprocessableEntityException('Only OPEN auctions can be extended');
+    }
+
+    const base = auction.end_time ? new Date(auction.end_time) : new Date();
+    const newEndTime = new Date(base.getTime() + minutes * 60_000).toISOString();
+    return this.extendEndTime(id, newEndTime);
   }
 
   async extendEndTime(auctionId: string, newEndTime: string): Promise<AuctionRow> {

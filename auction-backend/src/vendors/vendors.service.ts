@@ -58,6 +58,13 @@ export class VendorsService {
     vendorIds: string[],
     buyerId: string,
   ): Promise<void> {
+    const auctionStatus = await this.vendorsRepository.findAuctionStatus(auctionId);
+    if (!auctionStatus || auctionStatus === 'DRAFT' || auctionStatus === 'CANCELLED') {
+      throw new UnprocessableEntityException(
+        'Vendors can only be invited to PUBLISHED or OPEN auctions',
+      );
+    }
+
     await this.vendorsRepository.createInvitations(auctionId, vendorIds);
 
     // Notify each invited vendor — fire-and-forget per vendor
@@ -151,5 +158,9 @@ export class VendorsService {
   async getVendorIdByUserId(userId: string): Promise<string> {
     const vendor = await this.getOwnProfile(userId);
     return vendor.id;
+  }
+
+  async getUserIdByVendorId(vendorId: string): Promise<string | null> {
+    return this.vendorsRepository.findUserIdByVendorId(vendorId);
   }
 }

@@ -8,6 +8,8 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { ConfigService } from '@nestjs/config';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeService } from './realtime.service';
 
@@ -21,18 +23,36 @@ export class RealtimeGateway
   @WebSocketServer()
   server!: Server;
 
-  constructor(private readonly realtimeService: RealtimeService) {}
+  private readonly authClient: SupabaseClient;
+
+  constructor(
+    private readonly realtimeService: RealtimeService,
+    private readonly config: ConfigService,
+  ) {
+    this.authClient = createClient(
+      this.config.getOrThrow<string>('SUPABASE_URL'),
+      this.config.getOrThrow<string>('SUPABASE_ANON_KEY'),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+  }
 
   afterInit(server: Server): void {
     this.realtimeService.setServer(server);
   }
 
-  handleConnection(client: Socket): void {
-    const userId = client.handshake.query['userId'] as string | undefined;
-    if (userId) {
-      // Join user-specific room for targeted notifications
-      void client.join(`user:${userId}`);
+  async handleConnection(client: Socket): Promise<void> {
+    const token = client.handshake.auth?.['token'] as string | undefined;
+    if (!token) return;
+
+    const { data, error } = await this.authClient.auth.getUser(token);
+    if (error || !data.user) {
+      client.disconnect(true);
+      return;
     }
+
+    client.data.userId = data.user.id;
+    client.data.role = data.user.user_metadata?.['role'] ?? null;
+    await client.join(`user:${data.user.id}`);
   }
 
   handleDisconnect(_client: Socket): void {

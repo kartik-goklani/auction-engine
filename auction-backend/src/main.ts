@@ -7,6 +7,10 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { globalValidationPipe } from './common/pipes/validation.pipe';
 import { LoggerService } from './common/logger/logger.service';
 
+/**
+ * Application bootstrap.
+ * Entry point layer: wires global middleware, CORS, and network binding.
+ */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
@@ -20,12 +24,22 @@ async function bootstrap(): Promise<void> {
   app.useGlobalPipes(globalValidationPipe);
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
-  app.enableCors({ origin: config.get<string>('FRONTEND_URL') });
+  const allowedOrigins = (config.get<string>('FRONTEND_URLS') ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+  });
 
   const port = config.get<number>('PORT') ?? 3000;
-  await app.listen(port);
+  const host = config.get<string>('HOST') ?? '0.0.0.0';
 
-  logger.log(`Application running on port ${port}`, 'Bootstrap');
+  await app.listen(port, host);
+
+  logger.log(`Application running on ${host}:${port}`, 'Bootstrap');
 }
 
 bootstrap();

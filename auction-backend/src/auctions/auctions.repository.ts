@@ -27,6 +27,7 @@ export interface AuctionRow {
   auto_extend_trigger: number;
   visibility: AuctionVisibility;
   cancellation_reason: string | null;
+  winning_vendor_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -113,7 +114,7 @@ export class AuctionsRepository {
   async updateStatus(
     id: string,
     status: AuctionStatus,
-    extra: Partial<Pick<AuctionRow, 'cancellation_reason' | 'end_time'>> = {},
+    extra: Partial<Pick<AuctionRow, 'cancellation_reason' | 'end_time' | 'winning_vendor_id'>> = {},
   ): Promise<AuctionRow> {
     const { data, error } = await this.db
       .getClient()
@@ -125,6 +126,28 @@ export class AuctionsRepository {
 
     if (error || !data) {
       throw new InternalServerErrorException('Failed to update auction status');
+    }
+    return data as AuctionRow;
+  }
+
+  async updateFields(
+    id: string,
+    fields: Partial<Pick<AuctionRow,
+      'title' | 'description' | 'category' | 'start_time' | 'end_time' |
+      'ceiling_price' | 'reserve_price' | 'min_decrement' |
+      'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility'
+    >>,
+  ): Promise<AuctionRow> {
+    const { data, error } = await this.db
+      .getClient()
+      .from('auctions')
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new InternalServerErrorException('Failed to update auction');
     }
     return data as AuctionRow;
   }
@@ -189,6 +212,16 @@ export class AuctionsRepository {
 
     if (error || !data) throw new InternalServerErrorException('Failed to update lot');
     return data as LotRow;
+  }
+
+  async delete(id: string): Promise<void> {
+    const { error } = await this.db
+      .getClient()
+      .from('auctions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw new InternalServerErrorException('Failed to delete auction');
   }
 
   // ── Audit trail ───────────────────────────────────────────────────────────

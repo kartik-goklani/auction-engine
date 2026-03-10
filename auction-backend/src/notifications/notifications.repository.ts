@@ -23,14 +23,41 @@ export class NotificationsRepository {
     title: string;
     body?: string;
     metadata?: Record<string, unknown>;
-  }): Promise<void> {
-    await this.db.getClient().from('notifications').insert({
-      user_id: entry.userId,
-      type: entry.type,
-      title: entry.title,
-      body: entry.body ?? null,
-      metadata: entry.metadata ?? null,
-    });
+  }): Promise<NotificationRow> {
+    const { data, error } = await this.db
+      .getClient()
+      .from('notifications')
+      .insert({
+        user_id: entry.userId,
+        type: entry.type,
+        title: entry.title,
+        body: entry.body ?? null,
+        metadata: entry.metadata ?? null,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new InternalServerErrorException('Failed to create notification');
+    }
+
+    return data as NotificationRow;
+  }
+
+  async findRecentByUser(userId: string, sinceIso: string): Promise<NotificationRow[]> {
+    const { data, error } = await this.db
+      .getClient()
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new InternalServerErrorException('Failed to fetch recent notifications');
+    }
+
+    return (data ?? []) as NotificationRow[];
   }
 
   async findByUser(userId: string): Promise<NotificationRow[]> {

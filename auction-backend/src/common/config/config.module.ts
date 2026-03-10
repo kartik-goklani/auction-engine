@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { z } from 'zod';
 
+/**
+ * Application configuration module.
+ * Infrastructure layer: validates environment variables at startup.
+ */
 const envSchema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_ANON_KEY: z.string().min(1),
@@ -12,8 +16,9 @@ const envSchema = z.object({
   LANGCHAIN_API_KEY: z.string().min(1),
   LANGCHAIN_PROJECT: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3000),
+  HOST: z.string().min(1).default('0.0.0.0'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  FRONTEND_URL: z.url().default('http://localhost:3001'),
+  FRONTEND_URLS: z.string().min(1).default('http://localhost:3000'),
 });
 
 function validate(config: Record<string, unknown>): Record<string, unknown> {

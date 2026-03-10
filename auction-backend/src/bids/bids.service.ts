@@ -48,7 +48,7 @@ export class BidsService {
 
     if (result.status === BidStatus.REJECTED) {
       // Return rejection — do not throw; the rejection reason is the response
-      this.realtimeService.emitToAuction(auctionId, 'bid_rejected', {
+      this.realtimeService.emitToUser(vendorUserId, 'bid_rejected', {
         reason: result.rejection_reason,
         submittedAmount: amount,
       });
@@ -90,6 +90,14 @@ export class BidsService {
         newEndTime: extended.end_time,
         extensionMinutes: auction.auto_extend_minutes,
       });
+
+      this.notificationsService.send(
+        auction.buyer_id,
+        NotificationType.AUCTION_EXTENDED,
+        'Auction extended',
+        `The auction end time was extended to ${new Date(extended.end_time ?? '').toLocaleTimeString('en-IN')}.`,
+        { auctionId, newEndTime: extended.end_time, extensionMinutes: auction.auto_extend_minutes },
+      );
     }
 
     // Emit bid_confirmed privately to the bidding vendor
@@ -104,7 +112,7 @@ export class BidsService {
     const vendorRank = ranks.get(vendorId);
     if (vendorRank !== undefined) {
       this.realtimeService.emitRankToVendor(
-        vendorUserId, // NOTE: using userId as socketId — in production, track socket-to-user mapping
+        vendorUserId,
         auction.type as AuctionType,
         auction.visibility,
         vendorRank,
@@ -113,12 +121,16 @@ export class BidsService {
     }
 
     // Notify all other vendors they have been outbid (fire-and-forget per vendor)
-    const bestBid = await this.bidsRepository.getBestBid(auctionId, auction.type);
-    if (bestBid && bestBid.vendor_id !== vendorId) {
-      this.realtimeService.emitToUser(bestBid.vendor_id, 'outbid', {
-        yourAmount: bestBid.amount,
-        currentBestAmount: bid.amount,
-      });
+    const topBids = await this.bidsRepository.getTopAcceptedBids(auctionId, auction.type, 2);
+    const previousLeader = topBids.find((candidate) => candidate.vendor_id !== vendorId) ?? null;
+    if (previousLeader) {
+      const outbidUserId = await this.vendorsService.getUserIdByVendorId(previousLeader.vendor_id);
+      if (outbidUserId) {
+        this.realtimeService.emitToUser(outbidUserId, 'outbid', {
+          yourAmount: previousLeader.amount,
+          currentBestAmount: bid.amount,
+        });
+      }
     }
 
     // Non-blocking: anomaly detection agent

@@ -40,6 +40,17 @@ export interface AlertRaisedPayload {
   description: string;
 }
 
+export interface NotificationPayload {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  metadata: Record<string, unknown> | null;
+  read: boolean;
+  created_at: string;
+}
+
 @Injectable()
 export class RealtimeService {
   private server: Server | null = null;
@@ -55,11 +66,6 @@ export class RealtimeService {
   /** Broadcast an event to everyone in the auction room. */
   emitToAuction(auctionId: string, event: string, payload: unknown): void {
     this.server?.to(`auction:${auctionId}`).emit(event, payload);
-  }
-
-  /** Send a private event to a single socket (e.g. your_rank, outbid). */
-  emitToSocket(socketId: string, event: string, payload: unknown): void {
-    this.server?.to(socketId).emit(event, payload);
   }
 
   /** Deliver a notification to all sockets authenticated as a given user. */
@@ -102,7 +108,7 @@ export class RealtimeService {
    * Sealed bid never reveals rank during bidding.
    */
   emitRankToVendor(
-    socketId: string,
+    userId: string,
     auctionType: AuctionType,
     visibility: AuctionVisibility,
     rank: number,
@@ -112,6 +118,6 @@ export class RealtimeService {
     if (visibility === AuctionVisibility.BLIND) return;
 
     const payload: RankPayload = { rank, totalActiveBidders };
-    this.emitToSocket(socketId, 'your_rank', payload);
+    this.emitToUser(userId, 'your_rank', payload);
   }
 }

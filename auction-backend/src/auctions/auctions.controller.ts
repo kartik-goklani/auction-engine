@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -16,7 +17,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUser as CurrentUserType } from '../common/types';
 import { CreateAuctionDto } from './dto/create-auction.dto';
+import { UpdateAuctionDto } from './dto/update-auction.dto';
 import { CancelAuctionDto } from './dto/cancel-auction.dto';
+import { ExtendAuctionDto } from './dto/extend-auction.dto';
+import { AwardAuctionDto } from './dto/award-auction.dto';
 import { CreateLotDto } from './dto/create-lot.dto';
 
 @Controller('auctions')
@@ -39,8 +43,21 @@ export class AuctionsController {
   }
 
   @Get(':id')
+  @Roles('buyer', 'vendor')
   findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
+    if (user.role === 'vendor') {
+      return this.auctionsService.findByIdPublic(id);
+    }
     return this.auctionsService.findById(id, user.id);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateAuctionDto,
+    @CurrentUser() user: CurrentUserType,
+  ) {
+    return this.auctionsService.update(id, user.id, dto);
   }
 
   @Patch(':id/publish')
@@ -59,8 +76,21 @@ export class AuctionsController {
   }
 
   @Patch(':id/award')
-  award(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
-    return this.auctionsService.award(id, user.id);
+  award(
+    @Param('id') id: string,
+    @Body() dto: AwardAuctionDto,
+    @CurrentUser() user: CurrentUserType,
+  ) {
+    return this.auctionsService.award(id, user.id, dto.winningVendorId);
+  }
+
+  @Patch(':id/extend')
+  extend(
+    @Param('id') id: string,
+    @Body() dto: ExtendAuctionDto,
+    @CurrentUser() user: CurrentUserType,
+  ) {
+    return this.auctionsService.extendByMinutes(id, user.id, dto.minutes);
   }
 
   @Patch(':id/cancel')
@@ -70,6 +100,11 @@ export class AuctionsController {
     @CurrentUser() user: CurrentUserType,
   ) {
     return this.auctionsService.cancel(id, user.id, dto.reason);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
+    return this.auctionsService.delete(id, user.id);
   }
 
   @Post(':id/clone')
