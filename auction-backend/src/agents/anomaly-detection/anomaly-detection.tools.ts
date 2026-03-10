@@ -2,6 +2,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { ANOMALY, AGENT_QUERY } from '../../common/constants';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { getCanonicalRiskThresholdContext, isMinorUnitAmount } from './anomaly-detection.helpers';
 
 export function createAnomalyDetectionTools(db: SupabaseClient): DynamicStructuredTool[] {
   const getRecentBidsForAuction = new DynamicStructuredTool({
@@ -52,9 +53,17 @@ export function createAnomalyDetectionTools(db: SupabaseClient): DynamicStructur
           }),
         )
         .describe('Bid array from get_recent_bids_for_auction'),
-      riskThresholdPaise: z.number().int().describe('Risk threshold from Agent 1 output'),
+      riskThresholdPaise: z.number().int().nullable().describe('Risk threshold from Agent 1 output'),
     }),
     func: async ({ bids, riskThresholdPaise }) => {
+      const hasValidRiskThreshold = riskThresholdPaise == null || isMinorUnitAmount(riskThresholdPaise);
+      if (!hasValidRiskThreshold) {
+        return JSON.stringify({
+          anomaly_detected: false,
+          reason: 'Risk threshold is not a valid paise integer',
+        });
+      }
+
       if (bids.length < ANOMALY.COLLUSION_MIN_BIDS) {
         return JSON.stringify({
           anomaly_detected: false,
@@ -87,7 +96,9 @@ export function createAnomalyDetectionTools(db: SupabaseClient): DynamicStructur
       }
 
       // Detect below-risk bids
-      const belowRiskBids = bids.filter((b) => b.amount < riskThresholdPaise);
+      const belowRiskBids = riskThresholdPaise == null
+        ? []
+        : bids.filter((b) => b.amount < riskThresholdPaise);
 
       const collusionDetected = collusionPairsFound >= ANOMALY.COLLUSION_MIN_PAIRS;
       const belowRiskDetected = belowRiskBids.length > 0;
@@ -114,19 +125,16 @@ export function createAnomalyDetectionTools(db: SupabaseClient): DynamicStructur
       auctionId: z.string(),
     }),
     func: async ({ auctionId }) => {
-      const { data } = await db
-        .from('auction_ai_metadata')
-        .select('risk_threshold, risk_note, confidence_level')
-        .eq('auction_id', auctionId)
-        .single();
-
-      if (!data) {
-        return JSON.stringify({
-          risk_threshold: null,
-          message: 'No AI metadata found — Price Intelligence agent may not have run',
-        });
-      }
-      return JSON.stringify(data);
+      const context = await getCanonicalRiskThresholdContext(db, auctionId);
+      return JSON.stringify({
+        auction_type: context.auctionType,
+        risk_threshold: context.riskThreshold,
+        risk_note: context.riskNote,
+        confidence_level: context.confidenceLevel,
+        metadata_agent_run_id: context.metadataAgentRunId,
+        metadata_created_at: context.metadataCreatedAt,
+        message: context.reason,
+      });
     },
   });
 

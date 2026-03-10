@@ -3,13 +3,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { runReactLoop } from '../react-runner';
 import { AI } from '../../common/constants';
 import { createPriceIntelligenceTools } from './price-intelligence.tools';
+import { AuctionType } from '../../common/types';
 
 export interface PriceIntelligenceOutput {
   ceiling_price: number;
   suggested_decrement: number;
-  risk_threshold: number;
+  risk_threshold: number | null;
   confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
-  risk_note: string;
+  risk_note: string | null;
 }
 
 export interface PriceIntelligenceResult {
@@ -24,9 +25,14 @@ export async function runPriceIntelligenceAgent(
   auctionId: string,
   category: string,
   currentCeilingPrice: number,
+  auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID',
 ): Promise<PriceIntelligenceResult> {
-  const tools = createPriceIntelligenceTools(db);
+  const tools = createPriceIntelligenceTools(db, auctionType as AuctionType);
   const model = new ChatOpenAI({ model: AI.MODEL, temperature: AI.TEMPERATURE });
+  const isForward = auctionType === 'FORWARD';
+  const riskInstruction = isForward
+    ? '- risk_threshold: null\n- risk_note: null\n'
+    : '- risk_threshold: minimum acceptable bid before risk flags should trigger in paise (integer)\n- risk_note: 1-2 sentences explaining the risk rationale\n';
 
   const prompt = `You are a procurement price intelligence agent. Analyse historical auction data
 for the category "${category}" and the current ceiling price of ${currentCeilingPrice} paise
@@ -40,9 +46,11 @@ Use your tools to:
 Then provide a JSON recommendation with these fields:
 - ceiling_price: recommended ceiling price in paise (integer)
 - suggested_decrement: minimum bid decrement in paise (integer)
-- risk_threshold: minimum acceptable bid before risk flags should trigger in paise (integer)
+- auction_type: ${auctionType}
+- For FORWARD auctions, do not calculate a risk threshold because the reverse-auction "too cheap" logic does not apply.
+- For REVERSE and SEALED_BID auctions, keep the existing "too cheap" risk-threshold logic.
+${riskInstruction}
 - confidence_level: "HIGH", "MEDIUM", or "LOW" based on data quality
-- risk_note: 1-2 sentences explaining the risk rationale
 
 Return ONLY the JSON object, no other text. All amounts must be integers in paise.
 Auction ID: ${auctionId}`;
@@ -56,7 +64,15 @@ Auction ID: ${auctionId}`;
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as PriceIntelligenceOutput;
-    return { output: parsed, toolCalls, tokensUsed };
+    const normalized: PriceIntelligenceOutput = isForward
+      ? {
+          ...parsed,
+          risk_threshold: null,
+          risk_note: null,
+        }
+      : parsed;
+
+    return { output: normalized, toolCalls, tokensUsed };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return { output: null, toolCalls: [], tokensUsed: 0, error: message };

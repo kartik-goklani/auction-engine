@@ -2,12 +2,17 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { AGENT_QUERY, PRICE_INTELLIGENCE } from '../../common/constants';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { AuctionType } from '../../common/types';
+import { buildHistoricalAuctionResults } from './price-intelligence.helpers';
 
-export function createPriceIntelligenceTools(db: SupabaseClient): DynamicStructuredTool[] {
+export function createPriceIntelligenceTools(
+  db: SupabaseClient,
+  currentAuctionType: AuctionType,
+): DynamicStructuredTool[] {
   const getHistoricalAuctionData = new DynamicStructuredTool({
     name: 'get_historical_auction_data',
     description:
-      'Retrieves past closed/awarded auctions in the same category, including their final bid amounts.',
+      'Retrieves past closed/awarded auctions in the same category and auction type, including their final bid amounts.',
     schema: z.object({
       category: z.string().describe('The auction category to search for'),
       limit: z.number().int().min(1).max(AGENT_QUERY.MAX_LIMIT).default(AGENT_QUERY.DEFAULT_LIMIT),
@@ -17,6 +22,7 @@ export function createPriceIntelligenceTools(db: SupabaseClient): DynamicStructu
         .from('auctions')
         .select('id, title, ceiling_price, type, status, created_at')
         .eq('category', category)
+        .eq('type', currentAuctionType)
         .in('status', ['CLOSED', 'AWARDED'])
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -32,21 +38,10 @@ export function createPriceIntelligenceTools(db: SupabaseClient): DynamicStructu
         .in('auction_id', auctionIds)
         .eq('status', 'ACCEPTED');
 
-      const bestBidByAuction: Record<string, number> = {};
-      for (const bid of bids ?? []) {
-        const b = bid as { auction_id: string; amount: number };
-        if (!bestBidByAuction[b.auction_id] || b.amount < bestBidByAuction[b.auction_id]) {
-          bestBidByAuction[b.auction_id] = b.amount;
-        }
-      }
-
-      const result = data.map((a: { id: string; title: string; ceiling_price: number; type: string }) => ({
-        ...a,
-        final_bid_amount: bestBidByAuction[a.id] ?? null,
-        ceiling_utilisation_pct: bestBidByAuction[a.id]
-          ? Math.round((bestBidByAuction[a.id] / a.ceiling_price) * 100)
-          : null,
-      }));
+      const result = buildHistoricalAuctionResults(
+        data as Array<{ id: string; title: string; ceiling_price: number; type: string }>,
+        (bids ?? []) as Array<{ auction_id: string; amount: number }>,
+      );
 
       return JSON.stringify({ auctions: result });
     },

@@ -2,11 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../common/database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LoggerService } from '../common/logger/logger.service';
-import { AgentType, AgentRunStatus } from '../common/types';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AgentType, AgentRunStatus, AlertType, NotificationType } from '../common/types';
 import { runPriceIntelligenceAgent } from './price-intelligence/price-intelligence.agent';
 import { runVendorShortlistAgent, type VendorShortlistOutput } from './vendor-shortlist/vendor-shortlist.agent';
 import { runAnomalyDetectionAgent } from './anomaly-detection/anomaly-detection.agent';
 import { runAwardRecommendationAgent } from './award-recommendation/award-recommendation.agent';
+import {
+  getCanonicalRiskThresholdContext,
+  isMinorUnitAmount,
+  shouldRaiseBelowRiskAlert,
+} from './anomaly-detection/anomaly-detection.helpers';
 
 @Injectable()
 export class AgentsService {
@@ -16,6 +22,7 @@ export class AgentsService {
     private readonly db: DatabaseService,
     private readonly realtimeService: RealtimeService,
     private readonly logger: LoggerService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ── Agent 1: Price Intelligence ───────────────────────────────────────────
@@ -37,7 +44,7 @@ export class AgentsService {
       const { data: auction } = await this.db
         .getClient()
         .from('auctions')
-        .select('category, ceiling_price')
+        .select('category, ceiling_price, type')
         .eq('id', auctionId)
         .single();
 
@@ -53,6 +60,7 @@ export class AgentsService {
         auctionId,
         auction.category as string,
         auction.ceiling_price as number,
+        auction.type as 'REVERSE' | 'FORWARD' | 'SEALED_BID',
       );
 
       if (result.output) {
@@ -154,10 +162,23 @@ export class AgentsService {
     let agentRunId: string | null = null;
 
     try {
+      if (!isMinorUnitAmount(latestBidAmount)) {
+        this.logger.warn(
+          `Anomaly Detection skipped auctionId=${auctionId} latestBidAmount=${String(latestBidAmount)} reason=invalid_minor_unit_amount`,
+          this.CONTEXT,
+        );
+        return;
+      }
+
       const runRow = await this.insertAgentRun(auctionId, AgentType.ANOMALY_DETECTION);
       agentRunId = runRow.id as string;
+      const thresholdContext = await getCanonicalRiskThresholdContext(this.db.getClient(), auctionId);
 
       this.logger.log(`Anomaly Detection agent started auctionId=${auctionId} runId=${agentRunId}`, this.CONTEXT);
+      this.logger.debug(
+        `Anomaly threshold context auctionId=${auctionId} runId=${agentRunId} latestBidAmount=${latestBidAmount} auctionType=${thresholdContext.auctionType ?? 'UNKNOWN'} riskThreshold=${thresholdContext.riskThreshold ?? 'null'} metadataRunId=${thresholdContext.metadataAgentRunId ?? 'null'} metadataCreatedAt=${thresholdContext.metadataCreatedAt ?? 'null'} reason=${thresholdContext.reason ?? 'ok'}`,
+        this.CONTEXT,
+      );
 
       const result = await runAnomalyDetectionAgent(
         this.db.getClient(),
@@ -166,22 +187,97 @@ export class AgentsService {
         latestBidAmount,
       );
 
+      let hasValidAlerts = false;
       if (result.anomalyDetected) {
+        const { data: auction } = await this.db
+          .getClient()
+          .from('auctions')
+          .select('buyer_id')
+          .eq('id', auctionId)
+          .single();
+
+        const buyerId = (auction as { buyer_id: string } | null)?.buyer_id ?? null;
+
         // Broadcast alert to the buyer's monitoring room
         const { data: alerts } = await this.db
           .getClient()
           .from('auction_alerts')
-          .select('alert_type, severity, description')
+          .select('id, alert_type, severity, description')
           .eq('auction_id', auctionId)
           .eq('agent_run_id', agentRunId);
 
+        const invalidBelowRiskAlertIds: string[] = [];
+
         for (const alert of alerts ?? []) {
-          const a = alert as { alert_type: string; severity: string; description: string };
+          const a = alert as {
+            id: string;
+            alert_type: string;
+            severity: string;
+            description: string;
+          };
+
+          if (
+            a.alert_type === AlertType.BELOW_RISK_BID &&
+            !shouldRaiseBelowRiskAlert(
+              thresholdContext.auctionType,
+              latestBidAmount,
+              thresholdContext.riskThreshold,
+            )
+          ) {
+            invalidBelowRiskAlertIds.push(a.id);
+            continue;
+          }
+
+          hasValidAlerts = true;
           this.realtimeService.emitToAuction(auctionId, 'alert_raised', {
             alertType: a.alert_type,
             severity: a.severity,
             description: a.description,
           });
+
+          if (buyerId) {
+            const title = a.alert_type === 'COLLUSION_SIGNAL'
+              ? 'Collusion alert'
+              : 'Below-risk bid alert';
+            const notificationMetadata: Record<string, unknown> = {
+              auctionId,
+              severity: a.severity,
+              agentRunId,
+            };
+
+            if (a.alert_type === AlertType.BELOW_RISK_BID) {
+              notificationMetadata.latestBidAmount = latestBidAmount;
+              notificationMetadata.riskThreshold = thresholdContext.riskThreshold;
+            }
+
+            this.notificationsService.send(
+              buyerId,
+              NotificationType.ANOMALY_ALERT,
+              title,
+              a.description,
+              notificationMetadata,
+            );
+          }
+        }
+
+        if (invalidBelowRiskAlertIds.length > 0) {
+          const { error } = await this.db
+            .getClient()
+            .from('auction_alerts')
+            .delete()
+            .in('id', invalidBelowRiskAlertIds);
+
+          if (error) {
+            this.logger.warn(
+              `Failed to delete invalid below-risk alerts auctionId=${auctionId} runId=${agentRunId} count=${invalidBelowRiskAlertIds.length}`,
+              this.CONTEXT,
+            );
+          } else {
+            this.logger.warn(
+              `Suppressed invalid below-risk alerts auctionId=${auctionId} runId=${agentRunId} count=${invalidBelowRiskAlertIds.length} latestBidAmount=${latestBidAmount} riskThreshold=${thresholdContext.riskThreshold ?? 'null'}`,
+              this.CONTEXT,
+            );
+          }
         }
       }
 
@@ -189,7 +285,7 @@ export class AgentsService {
       const status = result.error ? AgentRunStatus.FAILED : AgentRunStatus.SUCCESS;
       await this.completeAgentRun(agentRunId, {
         toolCalls: result.toolCalls,
-        finalOutput: { anomaly_detected: result.anomalyDetected },
+        finalOutput: { anomaly_detected: hasValidAlerts },
         tokensUsed: result.tokensUsed,
         durationMs,
         status,
@@ -198,7 +294,7 @@ export class AgentsService {
       if (status === AgentRunStatus.FAILED) {
         this.logger.warn(`Anomaly Detection agent failed auctionId=${auctionId} runId=${agentRunId} error=${result.error}`, this.CONTEXT);
       } else {
-        this.logger.log(`Anomaly Detection agent completed auctionId=${auctionId} runId=${agentRunId} anomaly=${result.anomalyDetected} durationMs=${durationMs} tokens=${result.tokensUsed}`, this.CONTEXT);
+        this.logger.log(`Anomaly Detection agent completed auctionId=${auctionId} runId=${agentRunId} anomaly=${hasValidAlerts} durationMs=${durationMs} tokens=${result.tokensUsed}`, this.CONTEXT);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -224,6 +320,19 @@ export class AgentsService {
     let agentRunId: string | null = null;
 
     try {
+      // Pre-flight: skip entirely if auction has no accepted bids
+      const { count } = await this.db
+        .getClient()
+        .from('bids')
+        .select('id', { count: 'exact', head: true })
+        .eq('auction_id', auctionId)
+        .eq('status', 'ACCEPTED');
+
+      if ((count ?? 0) === 0) {
+        this.logger.log(`Award Recommendation skipped — no accepted bids auctionId=${auctionId}`, this.CONTEXT);
+        return;
+      }
+
       const runRow = await this.insertAgentRun(auctionId, AgentType.AWARD_RECOMMENDATION);
       agentRunId = runRow.id as string;
 
@@ -351,6 +460,19 @@ export class AgentsService {
     return data ?? [];
   }
 
+  async findPriceMetadataByAuction(auctionId: string): Promise<unknown> {
+    const { data } = await this.db
+      .getClient()
+      .from('auction_ai_metadata')
+      .select('*')
+      .eq('auction_id', auctionId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    return data ?? null;
+  }
+
   async findAlertsByAuction(auctionId: string): Promise<unknown[]> {
     const { data } = await this.db
       .getClient()
@@ -371,5 +493,22 @@ export class AgentsService {
       .limit(1)
       .single();
     return data ?? null;
+  }
+
+  async getShortlistResult(auctionId: string): Promise<VendorShortlistOutput | null> {
+    const { data } = await this.db
+      .getClient()
+      .from('agent_runs')
+      .select('final_output')
+      .eq('auction_id', auctionId)
+      .eq('agent_type', AgentType.VENDOR_SHORTLIST)
+      .eq('status', AgentRunStatus.SUCCESS)
+      .order('triggered_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!data) return null;
+    const row = data as { final_output: unknown };
+    return (row.final_output as VendorShortlistOutput) ?? null;
   }
 }

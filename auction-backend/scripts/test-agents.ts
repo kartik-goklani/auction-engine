@@ -2,13 +2,20 @@
  * Standalone agent smoke test.
  * Bypasses NestJS entirely — calls the agent runner functions directly.
  *
- * At startup, the script queries Supabase for the seeded test auctions by title
- * so that every agent runs against real data:
+ * At startup, the script discovers existing seeded auctions from Supabase by title
+ * fragment so that every agent runs against real, persistent data — no data is
+ * created or destroyed by this script.
  *
  *   Agent 1 (Price Intelligence)   → Auction A (OPEN REVERSE, office-supplies)
  *   Agent 2 (Vendor Shortlisting)  → Auction A (OPEN REVERSE, office-supplies)
  *   Agent 3 (Anomaly Detection)    → Auction A (OPEN, has collusion-pattern bids)
  *   Agent 4 (Award Recommendation) → Auction B (CLOSED FORWARD, stationery)
+ *
+ * Expected seed state (run tests/seed.py first if any check fails):
+ *   - An auction whose title contains "Auction A" with status OPEN must exist
+ *   - An auction whose title contains "Auction B" with status CLOSED must exist
+ *   - Auction A must have ≥ 3 ACCEPTED bids (for meaningful anomaly analysis)
+ *   - Auction A must have ≥ 1 ACCEPTED vendor invitation (for shortlisting)
  *
  * Run:
  *   node --env-file=.env node_modules/.bin/tsx scripts/test-agents.ts
@@ -72,7 +79,11 @@ async function findAuction(db: SupabaseClient, titleFragment: string, status: st
   return (data?.[0] as AuctionRow | undefined) ?? null;
 }
 
-async function findLatestBidAmount(db: SupabaseClient, auctionId: string): Promise<number> {
+async function findLatestBidAmount(
+  db: SupabaseClient,
+  auctionId: string,
+  ceilingPrice: number,
+): Promise<number> {
   const { data } = await db
     .from('bids')
     .select('amount')
@@ -81,7 +92,41 @@ async function findLatestBidAmount(db: SupabaseClient, auctionId: string): Promi
     .order('submitted_at', { ascending: false })
     .limit(1);
 
-  return (data?.[0] as { amount: number } | undefined)?.amount ?? 400_000;
+  // Fall back to 80% of ceiling so the agent has a realistic amount to analyse
+  // even if the auction has no bids yet (e.g. in a fresh seed environment).
+  return (data?.[0] as { amount: number } | undefined)?.amount ?? Math.floor(ceilingPrice * 0.8);
+}
+
+// ---------------------------------------------------------------------------
+// Pre-flight data readiness check
+// ---------------------------------------------------------------------------
+
+async function checkDataReadiness(
+  db: SupabaseClient,
+  openAuctionId: string,
+): Promise<void> {
+  const [bidsResult, invitationsResult] = await Promise.all([
+    db
+      .from('bids')
+      .select('id', { count: 'exact', head: true })
+      .eq('auction_id', openAuctionId)
+      .eq('status', 'ACCEPTED'),
+    db
+      .from('vendor_invitations')
+      .select('id', { count: 'exact', head: true })
+      .eq('auction_id', openAuctionId)
+      .eq('status', 'ACCEPTED'),
+  ]);
+
+  const bidCount = bidsResult.count ?? 0;
+  const invitationCount = invitationsResult.count ?? 0;
+
+  const bidStatus = bidCount >= 3 ? '✓' : `⚠  (${bidCount} found — run tests/seed.py for richer anomaly data)`;
+  const invStatus = invitationCount >= 1 ? '✓' : `⚠  (0 found — shortlist agent will find no accepted candidates)`;
+
+  console.log(`\n  Data readiness (Auction A):`);
+  console.log(`    Accepted bids       : ${bidCount}  ${bidStatus}`);
+  console.log(`    Accepted invitations: ${invitationCount}  ${invStatus}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,10 +148,15 @@ function printResult(label: string, result: unknown): void {
 // Agent test functions — each receives the resolved auction context
 // ---------------------------------------------------------------------------
 
-async function testPriceIntelligence(auctionId: string, category: string, ceiling: number): Promise<void> {
+async function testPriceIntelligence(
+  auctionId: string,
+  category: string,
+  ceiling: number,
+  auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID',
+): Promise<void> {
   header('Agent 1 — Price Intelligence');
-  console.log(`auctionId=${auctionId}  category=${category}  ceiling=${ceiling} paise (₹${ceiling / 100})`);
-  const result = await runPriceIntelligenceAgent(db, auctionId, category, ceiling);
+  console.log(`auctionId=${auctionId}  category=${category}  type=${auctionType}  ceiling=${ceiling} paise (₹${ceiling / 100})`);
+  const result = await runPriceIntelligenceAgent(db, auctionId, category, ceiling, auctionType);
   printResult(`output  (tokens=${result.tokensUsed}  tools=${result.toolCalls.length})`, result);
 }
 
@@ -185,7 +235,9 @@ async function main(): Promise<void> {
     }
   }
 
-  const latestBid = await findLatestBidAmount(db, openAuction.id);
+  const latestBid = await findLatestBidAmount(db, openAuction.id, openAuction.ceiling_price);
+
+  await checkDataReadiness(db, openAuction.id);
 
   console.log(`\n  [OPEN auction]   id=${openAuction.id}`);
   console.log(`                   title="${openAuction.title}"`);
@@ -198,7 +250,7 @@ async function main(): Promise<void> {
   try {
     switch (AGENT) {
       case 'price':
-        await testPriceIntelligence(openAuction.id, openAuction.category, openAuction.ceiling_price);
+        await testPriceIntelligence(openAuction.id, openAuction.category, openAuction.ceiling_price, openAuction.type as 'REVERSE' | 'FORWARD' | 'SEALED_BID');
         break;
       case 'shortlist':
         await testVendorShortlist(openAuction.id, openAuction.category);
@@ -210,7 +262,7 @@ async function main(): Promise<void> {
         await testAwardRecommendation(closedAuction.id);
         break;
       default:
-        await testPriceIntelligence(openAuction.id, openAuction.category, openAuction.ceiling_price);
+        await testPriceIntelligence(openAuction.id, openAuction.category, openAuction.ceiling_price, openAuction.type as 'REVERSE' | 'FORWARD' | 'SEALED_BID');
         await testVendorShortlist(openAuction.id, openAuction.category);
         await testAnomalyDetection(openAuction.id, latestBid);
         await testAwardRecommendation(closedAuction.id);

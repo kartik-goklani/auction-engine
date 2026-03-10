@@ -27,6 +27,11 @@ export class AgentsController {
     return this.agentsService.findRunsByAuction(auctionId);
   }
 
+  @Get('auctions/:auctionId/price-metadata')
+  getPriceMetadata(@Param('auctionId') auctionId: string): Promise<unknown> {
+    return this.agentsService.findPriceMetadataByAuction(auctionId);
+  }
+
   @Get('auctions/:auctionId/alerts')
   getAlerts(@Param('auctionId') auctionId: string): Promise<unknown[]> {
     return this.agentsService.findAlertsByAuction(auctionId);
@@ -35,5 +40,10 @@ export class AgentsController {
   @Get('auctions/:auctionId/recommendation')
   getRecommendation(@Param('auctionId') auctionId: string): Promise<unknown> {
     return this.agentsService.findRecommendationByAuction(auctionId);
+  }
+
+  @Get('auctions/:auctionId/shortlist')
+  getShortlist(@Param('auctionId') auctionId: string): Promise<unknown> {
+    return this.agentsService.getShortlistResult(auctionId);
   }
 }
