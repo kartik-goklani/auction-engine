@@ -1,26 +1,165 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ─── Design System: Promptly — zinc darks + purple-500 accent ──────────────── */
+/*                                                                                */
+/*  Architecture: @theme inline with var() references                             */
+/*                                                                                */
+/*  @theme inline inlines the VALUE literally into utility classes.               */
+/*  If the value IS a var() expression, the utility becomes dynamic:              */
+/*    bg-bg-page → background-color: var(--bg-page)                              */
+/*                                                                                */
+/*  Actual theme values live on :root (light) and html.dark (dark).              */
+/*  next-themes toggles the html.dark class — the utilities respond instantly.   */
+/*                                                                                */
+/*  Brand purple: #A855F7 (purple-500) — accent only, never as a background.    */
+/*  Dark backgrounds are pure zinc: #0F0F0F page · #18181B surface · #27272A border */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Backgrounds */
+  --color-bg-page:        var(--bg-page);
+  --color-bg-sidebar:     var(--bg-sidebar);
+  --color-bg-card:        var(--bg-card);
+  --color-bg-card-hover:  var(--bg-card-hover);
+  --color-bg-input:       var(--bg-input);
+  --color-bg-elevated:    var(--bg-elevated);
+  --color-bg-modal:       var(--bg-modal);
+  --color-bg-tag:         var(--bg-tag);
+
+  /* Brand / Accent — Promptly purple */
+  --color-accent:          var(--accent);
+  --color-accent-hover:    var(--accent-hover);
+  --color-accent-bright:   var(--accent-bright);
+  --color-accent-blue:     var(--accent-blue);
+  --color-accent-orange:   var(--accent-orange);
+
+  /* Semantic */
+  --color-success:         var(--success);
+  --color-danger:          var(--danger);
+  --color-warning:         var(--warning);
+  --color-info:            var(--info);
+
+  /* Text */
+  --color-text-primary:    var(--text-primary);
+  --color-text-secondary:  var(--text-secondary);
+  --color-text-muted:      var(--text-muted);
+
+  /* Borders */
+  --color-border-subtle:   var(--border-subtle);
+  --color-border-default:  var(--border-default);
+  --color-border-accent:   var(--border-accent);
+
+  /* Fonts */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Courier New", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Light mode (base) ────────────────────────────────────────────────────── */
+
+:root {
+  --bg-page:        #ffffff;
+  --bg-sidebar:     #f4f4f5;   /* zinc-100 */
+  --bg-card:        #ffffff;
+  --bg-card-hover:  #f4f4f5;   /* zinc-100 */
+  --bg-input:       #ffffff;
+  --bg-elevated:    #f4f4f5;   /* zinc-100 */
+  --bg-modal:       #ffffff;
+  --bg-tag:         #e4e4e7;   /* zinc-200 */
+
+  --accent:         #a855f7;   /* purple-500 — real Promptly brand */
+  --accent-hover:   #9333ea;   /* purple-600 */
+  --accent-bright:  #d946ef;   /* fuchsia-500 */
+  --accent-blue:    #3b82f6;
+  --accent-orange:  #f97316;
+
+  --success:        #16a34a;
+  --danger:         #ef4444;
+  --warning:        #f59e0b;
+  --info:           #3b82f6;
+
+  --text-primary:   #18181b;   /* zinc-900 */
+  --text-secondary: #52525b;   /* zinc-600 */
+  --text-muted:     #a1a1aa;   /* zinc-400 */
+
+  --border-subtle:  #e4e4e7;   /* zinc-200 */
+  --border-default: #d4d4d8;   /* zinc-300 */
+  --border-accent:  rgba(168, 85, 247, 0.35);
+
+  color-scheme: light;
+}
+
+/* ─── Dark mode — toggled by html.dark (next-themes) ───────────────────────── */
+
+html.dark {
+  /* Pure zinc blacks — no purple tint in backgrounds */
+  --bg-page:        #0f0f0f;   /* brand-black: pure near-black */
+  --bg-sidebar:     #0f0f0f;   /* same as page — border provides separation */
+  --bg-card:        #18181b;   /* zinc-900 — brand-surface */
+  --bg-card-hover:  #27272a;   /* zinc-800 */
+  --bg-input:       #18181b;   /* zinc-900 */
+  --bg-elevated:    #27272a;   /* zinc-800 */
+  --bg-modal:       #18181b;   /* zinc-900 */
+  --bg-tag:         #27272a;   /* zinc-800 */
+
+  --accent:         #a855f7;   /* purple-500 — same as light */
+  --accent-hover:   #9333ea;   /* purple-600 */
+  --accent-bright:  #d946ef;   /* fuchsia-500 */
+  --accent-blue:    #60a5fa;   /* blue-400 (brighter for dark bg) */
+  --accent-orange:  #f97316;
+
+  --success:        #22c55e;   /* green-500 */
+  --danger:         #f87171;   /* red-400 */
+  --warning:        #fbbf24;   /* amber-400 */
+  --info:           #60a5fa;   /* blue-400 */
+
+  --text-primary:   #e4e4e7;   /* zinc-200 */
+  --text-secondary: #a1a1aa;   /* zinc-400 */
+  --text-muted:     #71717a;   /* zinc-500 */
+
+  --border-subtle:  #27272a;   /* zinc-800 */
+  --border-default: #3f3f46;   /* zinc-700 */
+  --border-accent:  rgba(168, 85, 247, 0.40);
+
+  color-scheme: dark;
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  transition: background-color 0.2s ease, color 0.15s ease;
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar               { width: 6px; height: 6px; }
+::-webkit-scrollbar-track         { background: transparent; border-radius: 999px; }
+::-webkit-scrollbar-thumb         {
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.55), rgba(124, 58, 237, 0.45));
+  border-radius: 999px;
+  border: 1px solid rgba(39, 39, 42, 0.4);
+}
+::-webkit-scrollbar-thumb:hover   {
+  background: linear-gradient(180deg, rgba(192, 132, 252, 0.70), rgba(147, 51, 234, 0.60));
+}
+
+/* ─── Promptly purple ambient glow ─────────────────────────────────────────── */
+/* Matches Promptly's bg-purple-gradient-glow token (tailwind.config.js).       */
+/* Applied to a non-scrolling wrapper div in the buyer layout.                  */
+/* Uses violet-700 (rgba 126,34,206) — darker than accent for subtlety.         */
+
+.bg-purple-gradient-glow {
+  background-image: radial-gradient(
+    circle at 50% 0%,
+    rgba(126, 34, 206, 0.2) 0%,
+    rgba(15, 15, 15, 0) 40%
+  );
 }
