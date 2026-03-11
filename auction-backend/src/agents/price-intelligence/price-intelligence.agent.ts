@@ -11,6 +11,7 @@ export interface PriceIntelligenceOutput {
   risk_threshold: number | null;
   confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
   risk_note: string | null;
+  analysis_summary: string;
 }
 
 export interface PriceIntelligenceResult {
@@ -23,8 +24,9 @@ export interface PriceIntelligenceResult {
 export async function runPriceIntelligenceAgent(
   db: SupabaseClient,
   auctionId: string,
+  auctionTitle: string,
   category: string,
-  currentCeilingPrice: number,
+  currentCeilingPrice: number | null,
   auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID',
 ): Promise<PriceIntelligenceResult> {
   const tools = createPriceIntelligenceTools(db, auctionType as AuctionType);
@@ -34,9 +36,13 @@ export async function runPriceIntelligenceAgent(
     ? '- risk_threshold: null\n- risk_note: null\n'
     : '- risk_threshold: minimum acceptable bid before risk flags should trigger in paise (integer)\n- risk_note: 1-2 sentences explaining the risk rationale\n';
 
+  const priceContext = currentCeilingPrice == null
+    ? 'No buyer-entered ceiling or floor price was provided yet.'
+    : `The buyer-entered starting price context is ${currentCeilingPrice} paise (₹${(currentCeilingPrice / 100).toFixed(2)}).`;
+
   const prompt = `You are a procurement price intelligence agent. Analyse historical auction data
-for the category "${category}" and the current ceiling price of ${currentCeilingPrice} paise
-(₹${(currentCeilingPrice / 100).toFixed(2)}).
+for the auction titled "${auctionTitle}" in category "${category}".
+${priceContext}
 
 Use your tools to:
 1. Fetch historical auction data for this category
@@ -44,6 +50,7 @@ Use your tools to:
 3. Calculate price statistics from the historical bid amounts
 
 Then provide a JSON recommendation with these fields:
+- analysis_summary: 1-2 sentences summarising what data you analysed and the recommendation logic
 - ceiling_price: recommended ceiling price in paise (integer)
 - suggested_decrement: minimum bid decrement in paise (integer)
 - auction_type: ${auctionType}
@@ -67,10 +74,18 @@ Auction ID: ${auctionId}`;
     const normalized: PriceIntelligenceOutput = isForward
       ? {
           ...parsed,
+          analysis_summary:
+            parsed.analysis_summary ??
+            'Used internal auction history and vendor-risk data to estimate pricing guidance.',
           risk_threshold: null,
           risk_note: null,
         }
-      : parsed;
+      : {
+          ...parsed,
+          analysis_summary:
+            parsed.analysis_summary ??
+            'Used internal auction history and vendor-risk data to estimate pricing guidance.',
+        };
 
     return { output: normalized, toolCalls, tokensUsed };
   } catch (err: unknown) {

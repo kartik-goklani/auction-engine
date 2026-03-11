@@ -1,4 +1,7 @@
-import type { AuctionAiMetadata } from '@/lib/types';
+import type {
+  AuctionAiMetadata,
+  PriceIntelligenceSuggestion,
+} from '@/lib/types';
 import { ConfidenceLevel, AuctionType } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
@@ -8,11 +11,12 @@ import { Sparkles, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PriceIntelligenceCardProps {
-  metadata: AuctionAiMetadata | null;
+  metadata: AuctionAiMetadata | PriceIntelligenceSuggestion | null;
   loading?: boolean;
   auctionType?: AuctionType;
   onApply: (data: { ceilingPrice: number; minDecrement: number; riskThreshold?: number | null }) => void;
   onRegenerate?: () => void;
+  summary?: string | null;
 }
 
 const CONFIDENCE_VARIANT: Record<ConfidenceLevel, 'success' | 'warning' | 'danger'> = {
@@ -27,13 +31,14 @@ export function PriceIntelligenceCard({
   auctionType,
   onApply,
   onRegenerate,
+  summary,
 }: PriceIntelligenceCardProps) {
   const isForward = auctionType === AuctionType.FORWARD;
   if (loading) {
     return (
       <Card className="flex items-center gap-3 py-5">
         <Sparkles size={16} className="text-accent animate-pulse shrink-0" />
-        <p className="text-sm text-text-secondary animate-pulse">Analysing market data…</p>
+        <p className="text-sm text-text-secondary animate-pulse">Analysing internal pricing history…</p>
       </Card>
     );
   }
@@ -85,6 +90,12 @@ export function PriceIntelligenceCard({
           </div>
         ))}
       </div>
+
+      {summary && (
+        <p className="text-xs text-text-secondary leading-relaxed">
+          {summary}
+        </p>
+      )}
 
       {metadata.risk_note && !isForward && (
         <p className="text-xs text-text-secondary leading-relaxed border-t border-border-subtle pt-3">

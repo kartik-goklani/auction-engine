@@ -27,6 +27,8 @@ import type {
   UpdateAuctionPayload,
   CreateLotPayload,
   ShortlistedVendor,
+  AnalyzePriceIntelligencePayload,
+  PriceIntelligenceSuggestion,
 } from './types';
 
 // ─── Core fetch wrapper ──────────────────────────────────────────────────────
@@ -273,6 +275,15 @@ export const agentsApi = {
       `/agents/price-intelligence/${auctionId}`,
       { method: 'POST' },
     );
+  },
+
+  analyzePriceIntelligence(
+    payload: AnalyzePriceIntelligencePayload,
+  ): Promise<PriceIntelligenceSuggestion> {
+    return apiFetch<PriceIntelligenceSuggestion>('/agents/price-intelligence/analyze', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   /** Fetch all agent runs for an auction (for the trace viewer). */

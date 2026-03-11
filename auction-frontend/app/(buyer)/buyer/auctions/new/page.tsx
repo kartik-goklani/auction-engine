@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auctionsApi, agentsApi } from '@/lib/api';
-import type { AuctionAiMetadata } from '@/lib/types';
+import type { PriceIntelligenceSuggestion } from '@/lib/types';
 import { AuctionType, AuctionVisibility } from '@/lib/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -29,8 +29,6 @@ const CATEGORY_OPTIONS = [
 ] as const;
 
 const OTHER_VALUE = '__OTHER__';
-const PRICE_METADATA_POLL_MS = 1_500;
-const PRICE_METADATA_MAX_ATTEMPTS = 10;
 
 // ── Form state ──────────────────────────────────────────────────────────────
 
@@ -85,7 +83,7 @@ function localToIso(local: string): string {
 export default function NewAuctionPage() {
   const router = useRouter();
   const [form,        setForm]        = useState<FormState>(INITIAL);
-  const [aiMeta,      setAiMeta]      = useState<AuctionAiMetadata | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<PriceIntelligenceSuggestion | null>(null);
   const [aiLoading,   setAiLoading]   = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [submitting,  setSubmitting]  = useState(false);
@@ -96,48 +94,30 @@ export default function NewAuctionPage() {
   }
 
   async function triggerPriceIntelligence() {
+    const title = form.title.trim();
     const category = resolveCategory(form);
-    if (!category) { setError('Select a category first to get AI suggestions.'); return; }
+    if (!title) {
+      setError('Enter an auction title before running AI Suggest.');
+      return;
+    }
+    if (!category) {
+      setError('Select a category before running AI Suggest.');
+      return;
+    }
     setError('');
     setAiLoading(true);
-    let draftId: string | null = null;
     try {
-      // Create a temporary draft to run price intelligence — deleted after use
-      const draft = await auctionsApi.create({
-        title:       form.title || 'Draft',
-        description: form.description,
+      const suggestion = await agentsApi.analyzePriceIntelligence({
+        title,
+        description: form.description.trim() || undefined,
         category,
         type: form.auctionType,
-        visibility:  form.visibility,
-        startTime:  form.startTime ? localToIso(form.startTime) : new Date(Date.now() + 3_600_000).toISOString(),
-        endTime:    form.endTime   ? localToIso(form.endTime)   : new Date(Date.now() + 7_200_000).toISOString(),
-        ceilingPrice:       1_000_000,
-        minDecrement:       10_000,
-        reservePrice:       500_000,
-        autoExtendTrigger: parseInt(form.autoExtendTriggerMin) || 5,
-        autoExtendMinutes: parseInt(form.autoExtendMin)        || 5,
       });
-      draftId = draft.id;
-      let meta: AuctionAiMetadata | null = null;
-      for (let attempt = 0; attempt < PRICE_METADATA_MAX_ATTEMPTS; attempt++) {
-        meta = await agentsApi.priceMetadata(draft.id);
-        if (meta) break;
-        await new Promise((resolve) => setTimeout(resolve, PRICE_METADATA_POLL_MS));
-      }
-
-      if (!meta) {
-        throw new Error('AI metadata was not ready in time');
-      }
-
-      setAiMeta(meta);
+      setAiSuggestion(suggestion);
       setShowAiModal(true);
-    } catch {
-      setError('AI analysis failed. Fill in values manually.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'AI analysis failed. Fill in values manually.');
     } finally {
-      // Always clean up the draft to prevent orphan auctions in the list
-      if (draftId) {
-        void auctionsApi.delete(draftId).catch(() => undefined);
-      }
       setAiLoading(false);
     }
   }
@@ -146,6 +126,7 @@ export default function NewAuctionPage() {
     const nextState: Partial<FormState> = {
       ceilingPriceRupees:  (data.ceilingPrice  / 100).toFixed(2),
       minDecrementRupees:  (data.minDecrement  / 100).toFixed(2),
+      riskThresholdRupees: '',
     };
 
     if (data.riskThreshold != null) {
@@ -327,7 +308,7 @@ export default function NewAuctionPage() {
               onClick={triggerPriceIntelligence}
             >
               <Sparkles size={13} />
-              {aiMeta ? 'Regenerate AI Suggestions' : 'AI Suggest'}
+              {aiSuggestion ? 'Regenerate AI Suggestions' : 'AI Suggest'}
             </Button>
           </div>
 
@@ -417,15 +398,16 @@ export default function NewAuctionPage() {
       >
         <div className="flex flex-col gap-4">
           <p className="text-xs text-text-muted">
-            The Price Intelligence agent has analysed market data for <strong>{resolveCategory(form)}</strong>.
+            The Price Intelligence agent analysed internal auction history, pricing patterns, and vendor-risk data for <strong>{resolveCategory(form)}</strong>.
             Review the suggestions below and click Apply to populate the pricing fields.
           </p>
           <PriceIntelligenceCard
-            metadata={aiMeta}
+            metadata={aiSuggestion}
             auctionType={form.auctionType}
             loading={false}
             onApply={applyAiSuggestions}
             onRegenerate={() => { setShowAiModal(false); void triggerPriceIntelligence(); }}
+            summary={aiSuggestion?.analysis_summary ?? null}
           />
           <div className="flex justify-end gap-3 pt-2 border-t border-border-subtle">
             <Button variant="secondary" size="sm" onClick={() => setShowAiModal(false)}>

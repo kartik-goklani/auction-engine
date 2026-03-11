@@ -156,7 +156,14 @@ async function testPriceIntelligence(
 ): Promise<void> {
   header('Agent 1 — Price Intelligence');
   console.log(`auctionId=${auctionId}  category=${category}  type=${auctionType}  ceiling=${ceiling} paise (₹${ceiling / 100})`);
-  const result = await runPriceIntelligenceAgent(db, auctionId, category, ceiling, auctionType);
+  const result = await runPriceIntelligenceAgent(
+    db,
+    auctionId,
+    `Smoke Test ${category}`,
+    category,
+    ceiling,
+    auctionType,
+  );
   printResult(`output  (tokens=${result.tokensUsed}  tools=${result.toolCalls.length})`, result);
 }
 

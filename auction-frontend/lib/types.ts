@@ -269,7 +269,7 @@ export interface AgentToolCall {
 
 export interface AgentRunRow {
   id: string;
-  auction_id: string;
+  auction_id: string | null;
   agent_type: AgentType;
   triggered_at: string;
   completed_at: string | null;
@@ -290,6 +290,23 @@ export interface AuctionAiMetadata {
   confidence_level: ConfidenceLevel | null;
   agent_run_id: string | null;
   created_at: string;
+}
+
+export interface AnalyzePriceIntelligencePayload {
+  title: string;
+  category: string;
+  type: AuctionType;
+  description?: string;
+}
+
+export interface PriceIntelligenceSuggestion {
+  agent_run_id: string | null;
+  analysis_summary: string;
+  ceiling_price: number;
+  suggested_decrement: number;
+  risk_threshold: number | null;
+  risk_note: string | null;
+  confidence_level: ConfidenceLevel;
 }
 
 export interface AuctionAlertRow {

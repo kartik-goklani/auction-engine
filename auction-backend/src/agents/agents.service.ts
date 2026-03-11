@@ -1,10 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadGatewayException,
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { DatabaseService } from '../common/database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AgentType, AgentRunStatus, AlertType, NotificationType } from '../common/types';
-import { runPriceIntelligenceAgent } from './price-intelligence/price-intelligence.agent';
+import {
+  runPriceIntelligenceAgent,
+  type PriceIntelligenceOutput,
+} from './price-intelligence/price-intelligence.agent';
 import { runVendorShortlistAgent, type VendorShortlistOutput } from './vendor-shortlist/vendor-shortlist.agent';
 import { runAnomalyDetectionAgent } from './anomaly-detection/anomaly-detection.agent';
 import { runAwardRecommendationAgent } from './award-recommendation/award-recommendation.agent';
@@ -13,6 +21,17 @@ import {
   isMinorUnitAmount,
   shouldRaiseBelowRiskAlert,
 } from './anomaly-detection/anomaly-detection.helpers';
+import type { AnalyzePriceIntelligenceDto } from './dto/analyze-price-intelligence.dto';
+
+export interface PriceIntelligenceAnalysisResponse {
+  agent_run_id: string | null;
+  analysis_summary: string;
+  ceiling_price: number;
+  suggested_decrement: number;
+  risk_threshold: number | null;
+  risk_note: string | null;
+  confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
+}
 
 @Injectable()
 export class AgentsService {
@@ -37,66 +56,63 @@ export class AgentsService {
   }
 
   private async executePriceIntelligence(auctionId: string): Promise<void> {
-    const startedAt = Date.now();
-    let agentRunId: string | null = null;
-
     try {
       const { data: auction } = await this.db
         .getClient()
         .from('auctions')
-        .select('category, ceiling_price, type')
+        .select('title, category, ceiling_price, type')
         .eq('id', auctionId)
         .single();
 
       if (!auction) return;
 
-      const runRow = await this.insertAgentRun(auctionId, AgentType.PRICE_INTELLIGENCE);
-      agentRunId = runRow.id as string;
-
-      this.logger.log(`Price Intelligence agent started auctionId=${auctionId} runId=${agentRunId}`, this.CONTEXT);
-
-      const result = await runPriceIntelligenceAgent(
-        this.db.getClient(),
+      const result = await this.executePriceIntelligenceRun({
         auctionId,
-        auction.category as string,
-        auction.ceiling_price as number,
-        auction.type as 'REVERSE' | 'FORWARD' | 'SEALED_BID',
-      );
-
-      if (result.output) {
-        await this.db.getClient().from('auction_ai_metadata').insert({
-          auction_id: auctionId,
-          ceiling_price: result.output.ceiling_price,
-          suggested_decrement: result.output.suggested_decrement,
-          risk_threshold: result.output.risk_threshold,
-          risk_note: result.output.risk_note,
-          confidence_level: result.output.confidence_level,
-          agent_run_id: agentRunId,
-        });
-      }
-
-      const durationMs = Date.now() - startedAt;
-      const status = result.error ? AgentRunStatus.FAILED : AgentRunStatus.SUCCESS;
-      await this.completeAgentRun(agentRunId, {
-        toolCalls: result.toolCalls,
-        finalOutput: result.output,
-        tokensUsed: result.tokensUsed,
-        durationMs,
-        status,
+        title: auction.title as string,
+        category: auction.category as string,
+        currentCeilingPrice: auction.ceiling_price as number,
+        auctionType: auction.type as 'REVERSE' | 'FORWARD' | 'SEALED_BID',
+        persistMetadata: true,
       });
 
-      if (status === AgentRunStatus.FAILED) {
-        this.logger.warn(`Price Intelligence agent failed auctionId=${auctionId} runId=${agentRunId} error=${result.error}`, this.CONTEXT);
+      if (result.status === AgentRunStatus.FAILED) {
+        this.logger.warn(`Price Intelligence agent failed auctionId=${auctionId} runId=${result.agentRunId} error=${result.error ?? 'unknown'}`, this.CONTEXT);
       } else {
-        this.logger.log(`Price Intelligence agent completed auctionId=${auctionId} runId=${agentRunId} durationMs=${durationMs} tokens=${result.tokensUsed}`, this.CONTEXT);
+        this.logger.log(`Price Intelligence agent completed auctionId=${auctionId} runId=${result.agentRunId} durationMs=${result.durationMs} tokens=${result.tokensUsed}`, this.CONTEXT);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Price Intelligence agent threw auctionId=${auctionId}`, message, this.CONTEXT);
-      if (agentRunId) {
-        await this.failAgentRun(agentRunId, err, Date.now() - startedAt);
-      }
     }
+  }
+
+  async analyzePriceIntelligence(
+    input: AnalyzePriceIntelligenceDto,
+  ): Promise<PriceIntelligenceAnalysisResponse> {
+    const result = await this.executePriceIntelligenceRun({
+      auctionId: null,
+      title: input.title,
+      category: input.category,
+      currentCeilingPrice: null,
+      auctionType: input.type,
+      persistMetadata: false,
+    });
+
+    if (!result.output) {
+      throw new BadGatewayException(
+        result.error ?? 'Price intelligence analysis returned no usable suggestion',
+      );
+    }
+
+    return {
+      agent_run_id: result.agentRunId,
+      analysis_summary: result.output.analysis_summary,
+      ceiling_price: result.output.ceiling_price,
+      suggested_decrement: result.output.suggested_decrement,
+      risk_threshold: result.output.risk_threshold,
+      risk_note: result.output.risk_note,
+      confidence_level: result.output.confidence_level,
+    };
   }
 
   // ── Agent 2: Vendor Shortlisting ─────────────────────────────────────────
@@ -386,7 +402,7 @@ export class AgentsService {
   // ── Agent run helpers ─────────────────────────────────────────────────────
 
   private async insertAgentRun(
-    auctionId: string,
+    auctionId: string | null,
     agentType: AgentType,
   ): Promise<{ id: unknown }> {
     const { data, error } = await this.db
@@ -404,6 +420,113 @@ export class AgentsService {
       throw new Error(`Failed to insert agent_run: ${error?.message ?? 'unknown'}`);
     }
     return data as { id: unknown };
+  }
+
+  private async executePriceIntelligenceRun(input: {
+    auctionId: string | null;
+    title: string;
+    category: string;
+    currentCeilingPrice: number | null;
+    auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID';
+    persistMetadata: boolean;
+  }): Promise<{
+    agentRunId: string | null;
+    output: PriceIntelligenceOutput | null;
+    error?: string;
+    tokensUsed: number;
+    durationMs: number;
+    status: AgentRunStatus;
+  }> {
+    const startedAt = Date.now();
+    let agentRunId: string | null = null;
+
+    try {
+      const runTarget = input.auctionId ?? 'draftless-analysis';
+      if (input.auctionId) {
+        const runRow = await this.insertAgentRun(input.auctionId, AgentType.PRICE_INTELLIGENCE);
+        agentRunId = runRow.id as string;
+      }
+
+      this.logger.log(
+        `Price Intelligence agent started target=${runTarget} runId=${agentRunId}`,
+        this.CONTEXT,
+      );
+      const traceContextId = input.auctionId ?? agentRunId ?? runTarget;
+
+      const result = await runPriceIntelligenceAgent(
+        this.db.getClient(),
+        traceContextId,
+        input.title,
+        input.category,
+        input.currentCeilingPrice,
+        input.auctionType,
+      );
+
+      const durationMs = Date.now() - startedAt;
+      const status = result.error ? AgentRunStatus.FAILED : AgentRunStatus.SUCCESS;
+      const finalOutput = result.output == null
+        ? { error: result.error ?? 'Price intelligence produced no output' }
+        : result.output;
+
+      if (agentRunId) {
+        await this.completeAgentRun(agentRunId, {
+          toolCalls: result.toolCalls,
+          finalOutput,
+          tokensUsed: result.tokensUsed,
+          durationMs,
+          status,
+        });
+      }
+
+      if (input.persistMetadata && input.auctionId && agentRunId && result.output) {
+        await this.persistPriceMetadata(input.auctionId, agentRunId, result.output);
+      }
+
+      return {
+        agentRunId,
+        output: result.output,
+        error: result.error,
+        tokensUsed: result.tokensUsed,
+        durationMs,
+        status,
+      };
+    } catch (err: unknown) {
+      const durationMs = Date.now() - startedAt;
+
+      if (agentRunId) {
+        await this.failAgentRun(agentRunId, err, durationMs);
+      }
+
+      if (err instanceof HttpException) {
+        throw err;
+      }
+
+      throw err instanceof Error
+        ? new BadGatewayException(err.message)
+        : new BadGatewayException('Price intelligence analysis failed');
+    }
+  }
+
+  private async persistPriceMetadata(
+    auctionId: string,
+    agentRunId: string,
+    output: PriceIntelligenceOutput,
+  ): Promise<void> {
+    const { error } = await this.db.getClient().from('auction_ai_metadata').insert({
+      auction_id: auctionId,
+      ceiling_price: output.ceiling_price,
+      suggested_decrement: output.suggested_decrement,
+      risk_threshold: output.risk_threshold,
+      risk_note: output.risk_note,
+      confidence_level: output.confidence_level,
+      agent_run_id: agentRunId,
+    });
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Failed to persist price intelligence metadata: ${error.message}`,
+      );
+    }
   }
 
   private async completeAgentRun(
