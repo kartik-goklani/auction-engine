@@ -14,6 +14,8 @@ export interface AuctionRow {
   title: string;
   description: string | null;
   category: string;
+  quantity: number;
+  unit: string;
   type: AuctionType;
   status: AuctionStatus;
   buyer_id: string;
@@ -28,6 +30,9 @@ export interface AuctionRow {
   visibility: AuctionVisibility;
   cancellation_reason: string | null;
   winning_vendor_id: string | null;
+  brand_name: string | null;
+  model_number: string | null;
+  key_specs: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,6 +69,8 @@ export class AuctionsRepository {
         title: dto.title,
         description: dto.description ?? null,
         category: dto.category,
+        quantity: dto.quantity,
+        unit: dto.unit,
         type: dto.type,
         buyer_id: buyerId,
         start_time: dto.startTime ?? null,
@@ -75,6 +82,9 @@ export class AuctionsRepository {
         auto_extend_minutes: dto.autoExtendMinutes ?? AUCTION_DEFAULTS.AUTO_EXTEND_MINUTES,
         auto_extend_trigger: dto.autoExtendTrigger ?? AUCTION_DEFAULTS.AUTO_EXTEND_TRIGGER_MINUTES,
         visibility: dto.visibility ?? AUCTION_DEFAULTS.VISIBILITY,
+        brand_name: dto.brandName ?? null,
+        model_number: dto.modelNumber ?? null,
+        key_specs: dto.keySpecs ?? null,
       })
       .select()
       .single();
@@ -134,7 +144,7 @@ export class AuctionsRepository {
     id: string,
     fields: Partial<Pick<AuctionRow,
       'title' | 'description' | 'category' | 'start_time' | 'end_time' |
-      'ceiling_price' | 'reserve_price' | 'min_decrement' |
+      'quantity' | 'unit' | 'ceiling_price' | 'reserve_price' | 'min_decrement' |
       'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility'
     >>,
   ): Promise<AuctionRow> {

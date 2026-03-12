@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -23,6 +24,13 @@ export class CreateAuctionDto {
   @IsString()
   @MinLength(2)
   category!: string;
+
+  @IsPositive()
+  quantity!: number;
+
+  @IsString()
+  @MinLength(1)
+  unit!: string;
 
   @IsEnum(AuctionType)
   type!: AuctionType;
@@ -66,4 +74,19 @@ export class CreateAuctionDto {
   @IsOptional()
   @IsEnum(AuctionVisibility)
   visibility?: AuctionVisibility;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  brandName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  modelNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  keySpecs?: string;
 }

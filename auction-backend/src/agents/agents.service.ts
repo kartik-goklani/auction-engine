@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../common/database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LoggerService } from '../common/logger/logger.service';
@@ -26,11 +27,23 @@ import type { AnalyzePriceIntelligenceDto } from './dto/analyze-price-intelligen
 export interface PriceIntelligenceAnalysisResponse {
   agent_run_id: string | null;
   analysis_summary: string;
-  ceiling_price: number;
-  suggested_decrement: number;
+  ceiling_price: number | null;
+  suggested_decrement: number | null;
   risk_threshold: number | null;
   risk_note: string | null;
   confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
+  evidence_sources: Array<{
+    title: string;
+    domain: string;
+    url: string;
+    source_type: string;
+  }>;
+  market_context: string;
+  evidence_breakdown: {
+    web_match_count: number;
+    source_mix: Record<string, number>;
+  };
+  failure_reason?: 'INSUFFICIENT_PRICING_EVIDENCE';
 }
 
 @Injectable()
@@ -42,6 +55,7 @@ export class AgentsService {
     private readonly realtimeService: RealtimeService,
     private readonly logger: LoggerService,
     private readonly notificationsService: NotificationsService,
+    private readonly config: ConfigService,
   ) {}
 
   // ── Agent 1: Price Intelligence ───────────────────────────────────────────
@@ -60,7 +74,7 @@ export class AgentsService {
       const { data: auction } = await this.db
         .getClient()
         .from('auctions')
-        .select('title, category, ceiling_price, type')
+        .select('title, description, category, quantity, unit, ceiling_price, type, brand_name, model_number, key_specs')
         .eq('id', auctionId)
         .single();
 
@@ -69,10 +83,16 @@ export class AgentsService {
       const result = await this.executePriceIntelligenceRun({
         auctionId,
         title: auction.title as string,
+        description: (auction.description as string | null) ?? undefined,
         category: auction.category as string,
+        quantity: Number(auction.quantity),
+        unit: auction.unit as string,
         currentCeilingPrice: auction.ceiling_price as number,
         auctionType: auction.type as 'REVERSE' | 'FORWARD' | 'SEALED_BID',
         persistMetadata: true,
+        brandName: (auction.brand_name as string | null) ?? undefined,
+        modelNumber: (auction.model_number as string | null) ?? undefined,
+        keySpecs: (auction.key_specs as string | null) ?? undefined,
       });
 
       if (result.status === AgentRunStatus.FAILED) {
@@ -92,10 +112,16 @@ export class AgentsService {
     const result = await this.executePriceIntelligenceRun({
       auctionId: null,
       title: input.title,
+      description: input.description,
       category: input.category,
+      quantity: input.quantity,
+      unit: input.unit,
       currentCeilingPrice: null,
       auctionType: input.type,
       persistMetadata: false,
+      brandName: input.brandName,
+      modelNumber: input.modelNumber,
+      keySpecs: input.keySpecs,
     });
 
     if (!result.output) {
@@ -112,6 +138,12 @@ export class AgentsService {
       risk_threshold: result.output.risk_threshold,
       risk_note: result.output.risk_note,
       confidence_level: result.output.confidence_level,
+      evidence_sources: result.output.evidence_sources,
+      market_context: result.output.market_context,
+      evidence_breakdown: result.output.evidence_breakdown,
+      ...(result.output.failure_reason
+        ? { failure_reason: result.output.failure_reason }
+        : {}),
     };
   }
 
@@ -425,10 +457,16 @@ export class AgentsService {
   private async executePriceIntelligenceRun(input: {
     auctionId: string | null;
     title: string;
+    description?: string;
     category: string;
+    quantity: number;
+    unit: string;
     currentCeilingPrice: number | null;
     auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID';
     persistMetadata: boolean;
+    brandName?: string;
+    modelNumber?: string;
+    keySpecs?: string;
   }): Promise<{
     agentRunId: string | null;
     output: PriceIntelligenceOutput | null;
@@ -458,8 +496,17 @@ export class AgentsService {
         traceContextId,
         input.title,
         input.category,
+        input.quantity,
+        input.unit,
         input.currentCeilingPrice,
         input.auctionType,
+        {
+          apiKey: this.config.getOrThrow<string>('SERPER_API_KEY'),
+          defaultMarket: this.config.get<string>('DEFAULT_MARKET') ?? 'India',
+          timeoutMs: this.config.get<number>('SERPER_TIMEOUT_MS') ?? 5_000,
+          maxResults: this.config.get<number>('SERPER_MAX_RESULTS') ?? 5,
+        },
+        input.description,
       );
 
       const durationMs = Date.now() - startedAt;
