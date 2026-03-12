@@ -145,7 +145,8 @@ export class AuctionsRepository {
     fields: Partial<Pick<AuctionRow,
       'title' | 'description' | 'category' | 'start_time' | 'end_time' |
       'quantity' | 'unit' | 'ceiling_price' | 'reserve_price' | 'min_decrement' |
-      'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility'
+      'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility' |
+      'brand_name' | 'model_number' | 'key_specs'
     >>,
   ): Promise<AuctionRow> {
     const { data, error } = await this.db

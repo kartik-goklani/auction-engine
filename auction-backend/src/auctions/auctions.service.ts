@@ -102,12 +102,15 @@ export class AuctionsService {
     // Build the patch — only include defined fields
     const patch: Partial<Pick<AuctionRow,
       'title' | 'description' | 'category' | 'start_time' | 'end_time' |
-      'ceiling_price' | 'reserve_price' | 'min_decrement' |
-      'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility'
+      'quantity' | 'unit' | 'ceiling_price' | 'reserve_price' | 'min_decrement' |
+      'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility' |
+      'brand_name' | 'model_number' | 'key_specs'
     >> = {};
     if (dto.title            !== undefined) patch.title                = dto.title;
     if (dto.description      !== undefined) patch.description          = dto.description;
     if (dto.category         !== undefined) patch.category             = dto.category;
+    if (dto.quantity         !== undefined) patch.quantity             = dto.quantity;
+    if (dto.unit             !== undefined) patch.unit                 = dto.unit;
     if (dto.startTime        !== undefined) patch.start_time           = dto.startTime;
     if (dto.endTime          !== undefined) patch.end_time             = dto.endTime;
     if (dto.ceilingPrice     !== undefined) patch.ceiling_price        = dto.ceilingPrice;
@@ -117,6 +120,9 @@ export class AuctionsService {
     if (dto.autoExtendMinutes !== undefined) patch.auto_extend_minutes = dto.autoExtendMinutes;
     if (dto.autoExtendTrigger !== undefined) patch.auto_extend_trigger = dto.autoExtendTrigger;
     if (dto.visibility       !== undefined) patch.visibility           = dto.visibility;
+    if (dto.brandName        !== undefined) patch.brand_name           = dto.brandName ?? null;
+    if (dto.modelNumber      !== undefined) patch.model_number         = dto.modelNumber ?? null;
+    if (dto.keySpecs         !== undefined) patch.key_specs            = dto.keySpecs ?? null;
 
     // Validate that effective end_time > effective start_time
     const effectiveStart = patch.start_time ?? auction.start_time;
@@ -234,6 +240,8 @@ export class AuctionsService {
       title: `${source.title} (Copy)`,
       description: source.description ?? undefined,
       category: source.category,
+      quantity: source.quantity,
+      unit: source.unit,
       type: source.type,
       ceilingPrice: source.ceiling_price,
       reservePrice: source.reserve_price ?? undefined,
