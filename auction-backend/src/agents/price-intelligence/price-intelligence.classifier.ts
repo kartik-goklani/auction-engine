@@ -40,7 +40,12 @@ const SPEC_INDICATORS =
 /**
  * Classify a procurement item into one of four item classes.
  *
- * Rules evaluated top-to-bottom; first match wins.
+ * Rules evaluated top-to-bottom; first match wins:
+ *  1. EXACT_CATALOG — both brand AND model present
+ *  2. SPEC_DEFINED  — keySpecs provided, or spec indicators in title/category
+ *  3. COMMODITY     — commodity unit or category keyword
+ *  4. SERVICE       — service category without a commodity unit
+ *  5. Default       — SPEC_DEFINED (safe fallback, still searches)
  *
  * @param input - Structured item details from the auction DTO
  * @returns ItemClass
@@ -58,14 +63,14 @@ export function classifyItem(input: {
     return 'EXACT_CATALOG';
   }
 
-  // SERVICE: checked before SPEC_DEFINED — service categories must not be
-  // reclassified as SPEC_DEFINED just because the category contains a keyword
-  // that also appears in SPEC_INDICATORS (e.g. "service" in "IT Services").
+  // SPEC_DEFINED: explicit specs provided, or spec keywords in title/category.
+  // Evaluated before COMMODITY and SERVICE — a server with "16GB RAM" in the
+  // title should be SPEC_DEFINED even if the category contains service keywords.
   if (
-    SERVICE_CATEGORIES.test(input.category) &&
-    !COMMODITY_UNITS.test(input.unit.trim())
+    input.keySpecs?.trim() ||
+    SPEC_INDICATORS.test(`${input.title} ${input.category}`)
   ) {
-    return 'SERVICE';
+    return 'SPEC_DEFINED';
   }
 
   // COMMODITY: weight/volume/area unit, or commodity category keywords
@@ -76,12 +81,12 @@ export function classifyItem(input: {
     return 'COMMODITY';
   }
 
-  // SPEC_DEFINED: explicit specs provided, or spec keywords in title/category
+  // SERVICE: service engagement with no physical commodity unit
   if (
-    input.keySpecs?.trim() ||
-    SPEC_INDICATORS.test(`${input.title} ${input.category}`)
+    SERVICE_CATEGORIES.test(input.category) &&
+    !COMMODITY_UNITS.test(input.unit.trim())
   ) {
-    return 'SPEC_DEFINED';
+    return 'SERVICE';
   }
 
   // Safe default: SPEC_DEFINED (still searches, just without model enforcement)

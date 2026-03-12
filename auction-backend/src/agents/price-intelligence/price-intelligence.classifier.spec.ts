@@ -97,6 +97,16 @@ describe('classifyItem', () => {
     expect(result).toBe('SPEC_DEFINED');
   });
 
+
+  it('returns SPEC_DEFINED (not SERVICE) when title has spec indicators even in a service category', () => {
+    const result = classifyItem({
+      title: 'Server with 32GB RAM for managed services',
+      category: 'IT Services',
+      unit: 'units',
+    });
+    expect(result).toBe('SPEC_DEFINED');
+  });
+
   it('handles empty/undefined optional fields gracefully', () => {
     const result = classifyItem({
       brandName: '',        // empty string — should not trigger EXACT_CATALOG
