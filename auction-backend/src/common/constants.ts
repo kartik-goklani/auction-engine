@@ -108,6 +108,78 @@ export const PRICE_INTELLIGENCE = {
    * Bids below this level trigger a BELOW_RISK_BID anomaly alert.
    */
   RISK_THRESHOLD_MEDIAN_COEFFICIENT: 0.85,
+  /**
+   * Minimum weighted signal score required before a web price candidate is
+   * considered usable in the market evidence set.
+   */
+  MIN_WEB_SIGNAL_SCORE: 0.45,
+  /**
+   * Maximum supporting sources shown in the buyer-facing AI suggestion modal.
+   */
+  MAX_SOURCE_PREVIEW_COUNT: 5,
+  /**
+   * Maximum trusted results whose page text may be fetched for price extraction.
+   */
+  MAX_FETCHED_RESULT_PAGES: 3,
+  /**
+   * Minimum number of usable signals that qualifies an evidence set as strong.
+   */
+  STRONG_SIGNAL_COUNT: 3,
+  /**
+   * Safety cap applied to reverse-auction ceiling recommendations when using
+   * the upper credible price band. 0.10 = 10% buffer above the benchmark total.
+   */
+  REVERSE_CEILING_BUFFER_COEFFICIENT: 0.10,
+  /**
+   * Maximum upward adjustment applied to a reverse risk threshold based on
+   * poor vendor performance in the category.
+   */
+  MAX_RISK_THRESHOLD_RISK_ADJUSTMENT: 0.05,
+  /**
+   * Number of characters captured around a detected price to judge whether it
+   * is the actual product price, EMI text, or some unrelated fee/offer.
+   */
+  PRICE_CONTEXT_WINDOW_CHARS: 140,
+  /**
+   * Minimum candidate-level product match required before a page amount is
+   * considered usable as actual pricing evidence. 0.40 = stricter entity match
+   * to reduce false positives from unrelated product pages.
+   */
+  MIN_PRICE_CANDIDATE_MATCH_SCORE: 0.40,
+  /**
+   * IQR Tukey fence multiplier — standard robust outlier removal.
+   * 1.5 is the standard "inner fence" (mild outliers). Values outside
+   * Q1 - 1.5×IQR and Q3 + 1.5×IQR are rejected.
+   */
+  IQR_FENCE_MULTIPLIER: 1.5,
+  /**
+   * When only 2 candidates exist, reject the lower one if the upper is
+   * more than this multiple of it. Prevents a single ₹118 EMI price from
+   * surviving alongside a ₹60,000 real price.
+   */
+  TWO_SIGNAL_MAX_RATIO: 10,
+  /**
+   * Absolute minimum plausible price in paise (₹10). Any extracted price
+   * below this is unconditionally rejected — protects against garbage regex
+   * matches (coins, review counts, etc. appearing near INR symbols).
+   */
+  MIN_PLAUSIBLE_PRICE_PAISE: 1_000,
+  /**
+   * Floor buffer applied below the market benchmark for FORWARD auction
+   * floor prices. 0.10 = 10% below benchmark total.
+   */
+  FORWARD_FLOOR_BUFFER_COEFFICIENT: 0.10,
+  /**
+   * Fraction of recommended total price used for the suggested min decrement.
+   * e.g. 0.005 × ₹6,00,000 = ₹3,000 min decrement.
+   */
+  DECREMENT_TOTAL_FRACTION: 0.005,
+  /**
+   * Weight multiplier applied to evidence sources that explicitly mention
+   * wholesale/bulk/B2B pricing when quantity is large. More weight = stronger
+   * pull toward bulk-supplier prices in the weighted median.
+   */
+  BULK_SOURCE_WEIGHT_MULTIPLIER: 1.4,
 } as const;
 
 // ---------------------------------------------------------------------------
