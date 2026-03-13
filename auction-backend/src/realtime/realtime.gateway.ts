@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeService } from './realtime.service';
+import { VendorsService } from '../vendors/vendors.service';
 
 @WebSocketGateway({
   cors: { origin: '*' },
@@ -27,6 +28,7 @@ export class RealtimeGateway
 
   constructor(
     private readonly realtimeService: RealtimeService,
+    private readonly vendorsService: VendorsService,
     private readonly config: ConfigService,
   ) {
     this.authClient = createClient(
@@ -60,10 +62,20 @@ export class RealtimeGateway
   }
 
   @SubscribeMessage('join_auction')
-  handleJoinAuction(
+  async handleJoinAuction(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { auctionId: string; vendorId: string },
-  ): void {
+  ): Promise<void> {
+    const isEligible = await this.vendorsService.verifyInvitationAccepted(
+      payload.auctionId,
+      payload.vendorId,
+    );
+
+    if (!isEligible) {
+      client.emit('bid_rejected', { reason: 'VENDOR_NOT_ELIGIBLE' });
+      return;
+    }
+
     void client.join(`auction:${payload.auctionId}`);
   }
 

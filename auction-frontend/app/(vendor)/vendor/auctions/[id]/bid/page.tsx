@@ -31,16 +31,17 @@ export default function VendorBidPage() {
   const router  = useRouter();
   const { id }  = useParams<{ id: string }>();
 
-  const [auction,    setAuction]    = useState<AuctionRow | null>(null);
-  const [invitation, setInvitation] = useState<InvitationRow | null>(null);
-  const [vendorId,   setVendorId]   = useState<string>('');
-  const [currentBest,setCurrentBest]= useState<number | null>(null);
-  const [rankInfo,   setRankInfo]   = useState<YourRankPayload | null>(null);
-  const [toast,      setToast]      = useState<Toast | null>(null);
-  const [outbid,     setOutbid]     = useState(false);
+  const [auction,      setAuction]      = useState<AuctionRow | null>(null);
+  const [invitation,   setInvitation]   = useState<InvitationRow | null>(null);
+  const [vendorId,     setVendorId]     = useState<string>('');
+  const [currentBest,  setCurrentBest]  = useState<number | null>(null);
+  const [rankInfo,     setRankInfo]     = useState<YourRankPayload | null>(null);
+  const [totalVendors, setTotalVendors] = useState<number>(0);
+  const [toast,        setToast]        = useState<Toast | null>(null);
+  const [outbid,       setOutbid]       = useState(false);
   const [accessModalOpen, setAccessModalOpen] = useState(false);
-  const [responding, setResponding] = useState(false);
-  const [loading,    setLoading]    = useState(true);
+  const [responding,   setResponding]   = useState(false);
+  const [loading,      setLoading]      = useState(true);
 
   function showToast(message: string, kind: ToastKind) {
     setToast({ message, kind });
@@ -48,13 +49,14 @@ export default function VendorBidPage() {
   }
 
   const load = useCallback(async () => {
-    const [a, best, invitations] = await Promise.all([
+    const [a, bestResponse, invitations] = await Promise.all([
       auctionsApi.get(id),
-      bidsApi.best(id).then((response) => response.bestBid?.amount ?? null).catch(() => null),
+      bidsApi.best(id).catch(() => null),
       invitationsApi.mine().catch(() => []),
     ]);
     setAuction(a);
-    setCurrentBest(best);
+    setCurrentBest(bestResponse?.bestBid?.amount ?? null);
+    setTotalVendors(bestResponse?.acceptedVendorCount ?? 0);
     const currentInvitation = invitations.find((item) => item.auction_id === id) ?? null;
     setInvitation(currentInvitation);
     if (a.status === 'OPEN' && currentInvitation?.status !== InvitationStatus.ACCEPTED) {
@@ -100,6 +102,7 @@ export default function VendorBidPage() {
       });
       const offYourRank = onYourRank((p) => {
         setRankInfo(p);
+        setTotalVendors(p.totalActiveBidders);
       });
       const offOutbid = onOutbid((p) => {
         setOutbid(true);
@@ -153,7 +156,7 @@ export default function VendorBidPage() {
   if (loading || !auction) return <FullPageSpinner />;
 
   const isSealed   = auction.type === AuctionType.SEALED_BID;
-  const showRank   = !isSealed && auction.visibility !== AuctionVisibility.BLIND && rankInfo;
+  const showRank   = !isSealed && auction.visibility !== AuctionVisibility.BLIND && (rankInfo !== null || totalVendors > 0);
   const showPrice  = !isSealed && auction.visibility === AuctionVisibility.PRICE;
   const direction  = auction.type === AuctionType.FORWARD ? 'FORWARD' : 'REVERSE';
   const canJoinAuction = invitation?.status === InvitationStatus.ACCEPTED;
@@ -224,7 +227,10 @@ export default function VendorBidPage() {
         <Card className="flex items-center gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-text-muted mb-1">Your Rank</p>
-            <RankBadge rank={rankInfo!.rank} totalBidders={rankInfo!.totalActiveBidders} />
+            <RankBadge
+              rank={rankInfo?.rank ?? null}
+              totalBidders={rankInfo?.totalActiveBidders ?? totalVendors}
+            />
           </div>
         </Card>
       )}

@@ -35,20 +35,11 @@ export function BidInput({
         : currentBestAmount + minDecrement
       : null;
 
-  // Display value in rupees (decimal string)
-  const [displayValue, setDisplayValue] = useState(
-    suggestedPaise != null ? (suggestedPaise / 100).toFixed(2) : '',
-  );
+  // Display value in rupees (decimal string) — never pre-filled from suggestion
+  const [displayValue, setDisplayValue] = useState('');
   const [loading, setLoading]     = useState(false);
   const [cooldown, setCooldown]   = useState(0);
   const [error, setError]         = useState('');
-
-  // Sync suggestion when best bid changes
-  useEffect(() => {
-    if (suggestedPaise != null) {
-      setDisplayValue((suggestedPaise / 100).toFixed(2));
-    }
-  }, [suggestedPaise]);
 
   // Tick cooldown
   useEffect(() => {

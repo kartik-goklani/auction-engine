@@ -107,18 +107,24 @@ export class BidsService {
       status: bid.status,
     });
 
-    // Emit rank privately (visibility-enforced inside RealtimeService)
+    // Emit updated rank privately to EVERY vendor who has bid (visibility-enforced inside RealtimeService)
     const ranks = await this.bidsRepository.getVendorRanks(auctionId, auction.type);
-    const vendorRank = ranks.get(vendorId);
-    if (vendorRank !== undefined) {
-      this.realtimeService.emitRankToVendor(
-        vendorUserId,
-        auction.type as AuctionType,
-        auction.visibility,
-        vendorRank,
-        ranks.size,
-      );
-    }
+    const acceptedCount = await this.vendorsService.countAcceptedInvitations(auctionId);
+
+    await Promise.all(
+      Array.from(ranks.entries()).map(async ([vId, rank]) => {
+        const userId = await this.vendorsService.getUserIdByVendorId(vId);
+        if (userId) {
+          this.realtimeService.emitRankToVendor(
+            userId,
+            auction.type as AuctionType,
+            auction.visibility,
+            rank,
+            acceptedCount,
+          );
+        }
+      }),
+    );
 
     // Notify all other vendors they have been outbid (fire-and-forget per vendor)
     const topBids = await this.bidsRepository.getTopAcceptedBids(auctionId, auction.type, 2);
@@ -191,20 +197,23 @@ export class BidsService {
     bestBid: BidRow | null;
     totalBids: number;
     ranks: Record<string, number>;
+    acceptedVendorCount: number;
   }> {
     const auction = await this.auctionsService.findByIdPublic(auctionId);
     if (!auction) throw new NotFoundException('Auction not found');
 
-    const [bestBid, totalBids, ranksMap] = await Promise.all([
+    const [bestBid, totalBids, ranksMap, acceptedVendorCount] = await Promise.all([
       this.bidsRepository.getBestBid(auctionId, auction.type),
       this.bidsRepository.getAcceptedBidCount(auctionId),
       this.bidsRepository.getVendorRanks(auctionId, auction.type),
+      this.vendorsService.countAcceptedInvitations(auctionId),
     ]);
 
     return {
       bestBid,
       totalBids,
       ranks: Object.fromEntries(ranksMap),
+      acceptedVendorCount,
     };
   }
 }

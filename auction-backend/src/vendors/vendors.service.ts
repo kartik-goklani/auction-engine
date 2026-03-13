@@ -154,6 +154,10 @@ export class VendorsService {
     return this.vendorsRepository.verifyInvitationAccepted(auctionId, vendorId);
   }
 
+  countAcceptedInvitations(auctionId: string): Promise<number> {
+    return this.vendorsRepository.countAcceptedInvitations(auctionId);
+  }
+
   /** Used by AgentsService and BidsService to get the vendor DB id from a user id. */
   async getVendorIdByUserId(userId: string): Promise<string> {
     const vendor = await this.getOwnProfile(userId);

@@ -229,4 +229,16 @@ export class VendorsRepository {
 
     return data !== null;
   }
+
+  async countAcceptedInvitations(auctionId: string): Promise<number> {
+    const { count, error } = await this.db
+      .getClient()
+      .from('vendor_invitations')
+      .select('id', { count: 'exact', head: true })
+      .eq('auction_id', auctionId)
+      .eq('status', InvitationStatus.ACCEPTED);
+
+    if (error) throw new InternalServerErrorException(error.message);
+    return count ?? 0;
+  }
 }

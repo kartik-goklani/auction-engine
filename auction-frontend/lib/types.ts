@@ -230,6 +230,7 @@ export interface BestBidResponse {
   bestBid: BidRow | null;
   totalBids: number;
   ranks: Record<string, number>;
+  acceptedVendorCount: number;
 }
 
 // ─── Vendors ─────────────────────────────────────────────────────────────────
