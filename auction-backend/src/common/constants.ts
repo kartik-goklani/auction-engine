@@ -180,6 +180,19 @@ export const PRICE_INTELLIGENCE = {
    * pull toward bulk-supplier prices in the weighted median.
    */
   BULK_SOURCE_WEIGHT_MULTIPLIER: 1.4,
+  /**
+   * Extended context window (chars each side of the matched price) used
+   * exclusively for the hard EMI/installment hint check. Wider than the focused
+   * 24-char window so "₹6,999 starting EMI" patterns are caught even when the
+   * EMI keyword appears slightly further from the price token.
+   */
+  FINANCE_HINT_WINDOW_CHARS: 60,
+  /**
+   * When two price candidates' overallScores differ by less than this value,
+   * the higher-amount candidate wins. Breaks ties in favour of full product
+   * prices over EMI/accessory prices that score similarly on entity match.
+   */
+  CANDIDATE_SCORE_TIE_THRESHOLD: 0.08,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -11,6 +11,9 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Gavel, Plus } from 'lucide-react';
 
+const primaryActionClassName =
+  'inline-flex items-center justify-center rounded-full border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] text-[var(--inverse-control-text)] shadow-[var(--inverse-control-shadow)] transition-all duration-150 hover:bg-[var(--inverse-control-hover-bg)] hover:shadow-[var(--inverse-control-shadow-hover)] active:scale-[0.97]';
+
 export default function BuyerDashboardPage() {
   const router = useRouter();
   const [auctions, setAuctions] = useState<AuctionRow[]>([]);
@@ -43,14 +46,9 @@ export default function BuyerDashboardPage() {
           <h1 className="text-xl font-bold text-text-primary tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm text-text-muted">Overview of your procurement auctions</p>
         </div>
-        <Link href="/buyer/auctions/new">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 bg-accent text-white text-sm font-semibold px-5 py-2.5 rounded-full hover:bg-accent-hover active:scale-[0.97] transition-all duration-150 shadow-[0_4px_14px_rgba(168,85,247,0.40)] hover:shadow-[0_4px_20px_rgba(168,85,247,0.55)]"
-          >
-            <Plus size={14} />
-            New Auction
-          </button>
+        <Link href="/buyer/auctions/new" className={`${primaryActionClassName} gap-1.5 px-5 py-2.5 text-sm font-semibold`}>
+          <Plus size={14} />
+          New Auction
         </Link>
       </div>
 
@@ -105,14 +103,9 @@ export default function BuyerDashboardPage() {
             title="No auctions yet"
             description="Create your first auction to get started."
             action={
-              <Link href="/buyer/auctions/new">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 bg-accent text-white text-xs font-semibold px-4 py-2 rounded-full hover:bg-accent-hover active:scale-[0.97] transition-all duration-150 shadow-[0_4px_14px_rgba(168,85,247,0.40)]"
-                >
-                  <Plus size={13} />
-                  New Auction
-                </button>
+              <Link href="/buyer/auctions/new" className={`${primaryActionClassName} gap-1.5 px-4 py-2 text-xs font-semibold`}>
+                <Plus size={13} />
+                New Auction
               </Link>
             }
           />

@@ -31,12 +31,12 @@ export function NotificationDropdown() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative p-2 rounded-full text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors duration-150"
+        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-border-subtle bg-bg-card text-text-secondary transition-colors duration-150 hover:text-text-primary hover:bg-bg-elevated"
         aria-label="Notifications"
       >
         <Bell size={16} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-accent text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] px-1 text-[8px] font-bold leading-none text-[var(--inverse-control-text)]">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}

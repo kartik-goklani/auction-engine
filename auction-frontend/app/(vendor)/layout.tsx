@@ -18,6 +18,11 @@ const NAV_ITEMS = [
   { href: '/vendor/auctions',  label: 'Auctions',  Icon: Gavel           },
 ];
 
+const brandMarkClassName =
+  'flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] text-[var(--inverse-control-text)] shadow-[var(--inverse-control-shadow)]';
+const profileBadgeClassName =
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] text-[11px] font-bold text-[var(--inverse-control-text)] shadow-[var(--inverse-control-shadow)]';
+
 export default function VendorLayout({ children }: { children: ReactNode }) {
   const pathname      = usePathname();
   const router        = useRouter();
@@ -66,8 +71,8 @@ export default function VendorLayout({ children }: { children: ReactNode }) {
       <header className="h-[60px] shrink-0 bg-bg-page border-b border-border-subtle flex items-center justify-between px-6 gap-4 z-20">
         {/* Left: brand */}
         <div className="flex items-center gap-2.5 w-[200px] shrink-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent">
-            <Gavel size={15} className="text-white" />
+          <div className={brandMarkClassName}>
+            <Gavel size={15} className="text-current" />
           </div>
           <div className="leading-tight">
             <p className="text-[13px] font-bold text-text-primary tracking-tight">Auction Engine</p>
@@ -100,7 +105,7 @@ export default function VendorLayout({ children }: { children: ReactNode }) {
 
           {/* User */}
           <div className="flex items-center gap-2.5 pl-2.5 ml-0.5 border-l border-border-subtle">
-            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-[11px] font-bold text-white shrink-0">
+            <div className={profileBadgeClassName}>
               {initials}
             </div>
             <div className="hidden sm:block">
@@ -146,7 +151,7 @@ export default function VendorLayout({ children }: { children: ReactNode }) {
                       : 'text-text-secondary hover:bg-bg-card hover:text-text-primary',
                   )}
                 >
-                  <Icon size={15} className={active ? 'text-accent' : 'text-current'} />
+                  <Icon size={15} className="text-current" />
                   {label}
                 </Link>
               );
@@ -157,7 +162,7 @@ export default function VendorLayout({ children }: { children: ReactNode }) {
           <div className="px-3 pb-5 pt-2">
             <div className="rounded-2xl bg-bg-card border border-border-subtle p-3.5 flex flex-col gap-2 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
               <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-accent" />
+                <Sparkles size={13} className="text-text-primary" />
                 <p className="text-[11px] font-semibold text-text-primary">Live Bidding</p>
               </div>
               <p className="text-[10px] text-text-muted leading-relaxed">Accept invitations to join active auctions and place bids.</p>
@@ -169,15 +174,8 @@ export default function VendorLayout({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        {/* Main — relative + overflow-hidden so glow stays fixed as content scrolls */}
-        <main className="relative flex-1 overflow-hidden">
-          {/* Purple ambient glow */}
-          <div
-            className="bg-purple-gradient-glow pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[80%]"
-            aria-hidden="true"
-          />
-          {/* Scroll container */}
-          <div className="relative z-10 h-full overflow-y-auto p-7">
+        <main className="flex-1 overflow-hidden bg-bg-page">
+          <div className="h-full overflow-y-auto p-7">
             {children}
           </div>
         </main>

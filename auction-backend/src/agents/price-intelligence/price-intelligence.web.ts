@@ -3,10 +3,10 @@ import { PRICE_INTELLIGENCE } from '../../common/constants';
 import type { ProcurementContext } from './price-intelligence.context';
 import {
   classifySourceType,
-  type EvidenceSourceType,
   type WebEvidenceSignal,
 } from './price-intelligence.recommendation';
 import { scoreContextMatch } from './price-intelligence.context';
+import { removeOutliersIQR, filterImplausible } from './price-intelligence.normalizer';
 
 /**
  * Web-evidence extraction helpers for price intelligence.
@@ -28,12 +28,27 @@ const PRODUCT_PRICE_HINTS = [
   'starting at',
 ];
 
-const FINANCE_OR_NON_PRICE_HINTS = [
+/**
+ * Hard EMI/installment hints — ALWAYS reject a price candidate when any of
+ * these appear in the extended (60-char) context window, regardless of
+ * pricingBasis. These terms cannot co-occur with a valid product price.
+ * Checked before the soft list so "₹6,999/month per unit" is caught even
+ * though pricingBasis resolves to PER_UNIT (bypassing the old single guard).
+ */
+const HARD_EMI_HINTS = [
   'emi',
   'per month',
   '/month',
   'monthly',
   'subscription',
+] as const;
+
+/**
+ * Soft non-price hints — only reject when pricingBasis is UNKNOWN and no
+ * product-price hint is present. These terms sometimes appear near valid
+ * prices (e.g. "warranty included"), so they are not unconditionally rejected.
+ */
+const SOFT_NON_PRICE_HINTS = [
   'warranty',
   'care plan',
   'insurance',
@@ -43,7 +58,7 @@ const FINANCE_OR_NON_PRICE_HINTS = [
   'processing fee',
   'exchange bonus',
   'cashback',
-];
+] as const;
 
 interface PriceCandidate {
   amount: number;
@@ -94,31 +109,6 @@ function resolvePricingBasis(text: string): 'TOTAL' | 'PER_UNIT' | 'UNKNOWN' {
     return 'TOTAL';
   }
   return 'UNKNOWN';
-}
-
-function applyQuantityNormalization(
-  amount: number,
-  pricingBasis: 'TOTAL' | 'PER_UNIT' | 'UNKNOWN',
-  context: ProcurementContext,
-  sourceType: EvidenceSourceType,
-): number {
-  if (pricingBasis === 'PER_UNIT' && context.quantity && context.quantity > 1) {
-    return Math.round(amount * context.quantity);
-  }
-  if (
-    pricingBasis === 'UNKNOWN' &&
-    context.quantity &&
-    context.quantity > 1 &&
-    (
-      sourceType === 'MANUFACTURER' ||
-      sourceType === 'DISTRIBUTOR' ||
-      sourceType === 'B2B_SUPPLIER' ||
-      sourceType === 'MARKETPLACE'
-    )
-  ) {
-    return Math.round(amount * context.quantity);
-  }
-  return amount;
 }
 
 function extractDomain(url: string): string {
@@ -235,8 +225,20 @@ function buildPriceCandidates(
 
     const hasProductPriceHint = includesAny(normalizedWindow, PRODUCT_PRICE_HINTS);
 
+    // Stage 1: hard EMI/installment check — always reject, uses wider window.
+    // Checked before pricingBasis to catch "₹6,999/month per unit" where
+    // pricingBasis resolves to PER_UNIT and would skip the old single guard.
+    const extendedWindow = buildContextWindow(
+      text, start, end, PRICE_INTELLIGENCE.FINANCE_HINT_WINDOW_CHARS,
+    ).toLowerCase();
+    if (includesAny(extendedWindow, HARD_EMI_HINTS)) {
+      match = INR_PRICE_PATTERN.exec(text);
+      continue;
+    }
+
+    // Stage 2: soft non-price hints — only reject when no product-price intent.
     if (
-      includesAny(normalizedWindow, FINANCE_OR_NON_PRICE_HINTS) &&
+      includesAny(normalizedWindow, SOFT_NON_PRICE_HINTS) &&
       !hasProductPriceHint &&
       pricingBasis === 'UNKNOWN'
     ) {
@@ -265,41 +267,6 @@ function buildPriceCandidates(
   }
 
   return candidates;
-}
-
-function filterOutlierSignals(signals: ReadonlyArray<WebEvidenceSignal>): WebEvidenceSignal[] {
-  if (signals.length < PRICE_INTELLIGENCE.STRONG_SIGNAL_COUNT) {
-    return [...signals];
-  }
-
-  const sortedAmounts = signals
-    .map((signal) => signal.amount)
-    .sort((left, right) => left - right);
-
-  // Handle the degenerate two-signal case: if the upper price is more than
-  // TWO_SIGNAL_MAX_RATIO times the lower, the lower is almost certainly an EMI
-  // or unrelated price — reject it so only the real price survives.
-  if (sortedAmounts.length === 2) {
-    const lower = sortedAmounts[0]!;
-    const upper = sortedAmounts[1]!;
-    if (upper / lower > PRICE_INTELLIGENCE.TWO_SIGNAL_MAX_RATIO) {
-      return signals.filter((signal) => signal.amount === upper);
-    }
-    return [...signals];
-  }
-
-  // IQR Tukey inner-fence outlier removal (standard robust method).
-  const q1Index = Math.floor(sortedAmounts.length / 4);
-  const q3Index = Math.floor((3 * sortedAmounts.length) / 4);
-  const q1 = sortedAmounts[q1Index]!;
-  const q3 = sortedAmounts[q3Index]!;
-  const iqr = q3 - q1;
-  const lowerFence = q1 - PRICE_INTELLIGENCE.IQR_FENCE_MULTIPLIER * iqr;
-  const upperFence = q3 + PRICE_INTELLIGENCE.IQR_FENCE_MULTIPLIER * iqr;
-
-  return signals.filter(
-    (signal) => signal.amount >= lowerFence && signal.amount <= upperFence,
-  );
 }
 
 /**
@@ -353,8 +320,16 @@ export async function extractWebEvidenceSignals(input: {
       continue;
     }
 
-    const bestCandidate = [...candidates]
-      .sort((left, right) => right.overallScore - left.overallScore)[0];
+    const bestCandidate = [...candidates].sort((left, right) => {
+      const scoreDiff = right.overallScore - left.overallScore;
+      // When scores are within the tie threshold, prefer the higher-amount
+      // candidate. This biases toward full product prices over EMI/accessory
+      // prices that have similar entity-match scores.
+      if (Math.abs(scoreDiff) < PRICE_INTELLIGENCE.CANDIDATE_SCORE_TIE_THRESHOLD) {
+        return right.amount - left.amount;
+      }
+      return scoreDiff;
+    })[0];
 
     if (!bestCandidate) {
       continue;
@@ -373,12 +348,7 @@ export async function extractWebEvidenceSignals(input: {
       continue;
     }
 
-    const normalizedAmount = applyQuantityNormalization(
-      bestCandidate.amount,
-      bestCandidate.pricingBasis,
-      input.context,
-      sourceType,
-    );
+    const normalizedAmount = bestCandidate.amount;
 
     signals.push({
       amount: normalizedAmount,
@@ -399,7 +369,7 @@ export async function extractWebEvidenceSignals(input: {
     });
   }
 
-  return filterOutlierSignals(signals)
+  return removeOutliersIQR(filterImplausible(signals))
     .sort((left, right) => right.weight - left.weight)
     .slice(0, PRICE_INTELLIGENCE.MAX_SOURCE_PREVIEW_COUNT * 2);
 }

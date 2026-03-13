@@ -1,5 +1,6 @@
 # ── Root ────────────────────────────────────────────────
 .DS_Store
+database
 
 # ── Tests (tests/) ──────────────────────────────────────
 tests/.env.test
@@ -8,7 +9,7 @@ tests/.pytest_cache/
 CLAUDE.md
 ARCHITECTURE.md
 AGENTS.md
-.claude/mcp_settings.json
+.claude
 
 # ── Backend (auction-backend/) ──────────────────────────
 # compiled output
@@ -108,3 +109,6 @@ auction-frontend/.vercel
 # typescript
 auction-frontend/*.tsbuildinfo
 auction-frontend/next-env.d.ts
+
+# CodeYam local files (contains secrets and local database)
+.codeyam

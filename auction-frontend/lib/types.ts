@@ -141,6 +141,8 @@ export interface AuctionRow {
   title: string;
   description: string | null;
   category: string;
+  quantity: number;
+  unit: string;
   type: AuctionType;
   status: AuctionStatus;
   buyer_id: string;
@@ -155,6 +157,9 @@ export interface AuctionRow {
   visibility: AuctionVisibility;
   cancellation_reason: string | null;
   winning_vendor_id: string | null;
+  brand_name: string | null;
+  model_number: string | null;
+  key_specs: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -185,6 +190,11 @@ export interface CreateAuctionPayload {
   title: string;
   description?: string;
   category: string;
+  quantity: number;
+  unit: string;
+  brandName?: string;
+  modelNumber?: string;
+  keySpecs?: string;
   type: AuctionType;
   startTime?: string;
   endTime?: string;
@@ -286,6 +296,11 @@ export interface AuctionAiMetadata {
   ceiling_price: number | null;        // paise
   suggested_decrement: number | null;  // paise
   risk_threshold: number | null;       // paise
+  recommended_unit_price: number | null;
+  recommended_total_price: number | null;
+  comparable_count: number | null;
+  rejected_count: number | null;
+  item_classification: string | null;
   risk_note: string | null;
   confidence_level: ConfidenceLevel | null;
   agent_run_id: string | null;
@@ -295,18 +310,70 @@ export interface AuctionAiMetadata {
 export interface AnalyzePriceIntelligencePayload {
   title: string;
   category: string;
+  quantity: number;
+  unit: string;
   type: AuctionType;
   description?: string;
+  brandName?: string;
+  modelNumber?: string;
+  keySpecs?: string;
+}
+
+export interface PricingTrace {
+  item_classification: string;
+  queries_generated: string[];
+  raw_candidates: Array<{
+    url: string;
+    title: string;
+    detected_price_paise: number;
+    per_unit_paise: number | null;
+    rejection_reason: string | null;
+    entity_score: number;
+  }>;
+  iqr_trace: {
+    q1: number | null;
+    q3: number | null;
+    iqr: number | null;
+    lower_fence: number | null;
+    upper_fence: number | null;
+    accepted_count: number;
+    removed_count: number;
+    removed_prices: number[];
+  };
+  quantity_adjustment: {
+    benchmark_per_unit_paise: number;
+    quantity: number;
+    discount_pct: number;
+    discounted_per_unit_paise: number;
+    recommended_total_paise: number;
+  } | null;
+  comparable_count: number;
+  rejected_count: number;
 }
 
 export interface PriceIntelligenceSuggestion {
   agent_run_id: string | null;
   analysis_summary: string;
-  ceiling_price: number;
-  suggested_decrement: number;
+  ceiling_price: number | null;
+  suggested_decrement: number | null;
   risk_threshold: number | null;
+  recommended_unit_price: number | null;
+  recommended_total_price: number | null;
   risk_note: string | null;
   confidence_level: ConfidenceLevel;
+  evidence_sources: Array<{
+    title: string;
+    domain: string;
+    url: string;
+    source_type: string;
+  }>;
+  market_context: string;
+  evidence_breakdown: {
+    web_match_count: number;
+    source_mix: Record<string, number>;
+  };
+  pricing_trace: PricingTrace;
+  failure_reason?: 'INSUFFICIENT_PRICING_EVIDENCE';
 }
 
 export interface AuctionAlertRow {

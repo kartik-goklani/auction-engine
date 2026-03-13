@@ -161,8 +161,16 @@ async function testPriceIntelligence(
     auctionId,
     `Smoke Test ${category}`,
     category,
+    1,
+    'pcs',
     ceiling,
     auctionType,
+    {
+      apiKey: process.env['SERPER_API_KEY'] ?? '',
+      defaultMarket: 'India',
+      timeoutMs: 5_000,
+      maxResults: 5,
+    },
   );
   printResult(`output  (tokens=${result.tokensUsed}  tools=${result.toolCalls.length})`, result);
 }

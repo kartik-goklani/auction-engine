@@ -37,6 +37,8 @@ function toDatetimeLocal(iso: string | null): string {
 interface EditForm {
   title:            string;
   description:      string;
+  quantity:         string;
+  unit:             string;
   ceilingPriceRupees: string;
   minDecrementRupees: string;
   startTime:        string;
@@ -47,6 +49,8 @@ function auctionToEditForm(a: AuctionRow): EditForm {
   return {
     title:              a.title,
     description:        a.description ?? '',
+    quantity:           String(a.quantity),
+    unit:               a.unit,
     ceilingPriceRupees: toRupees(a.ceiling_price),
     minDecrementRupees: toRupees(a.min_decrement),
     startTime:          toDatetimeLocal(a.start_time),
@@ -107,6 +111,14 @@ export default function AuctionDetailPage() {
       setSaveError('Start time must be in the future.');
       return;
     }
+    if (!Number.isFinite(Number(editForm.quantity)) || Number(editForm.quantity) <= 0) {
+      setSaveError('Quantity must be greater than zero.');
+      return;
+    }
+    if (!editForm.unit.trim()) {
+      setSaveError('Unit is required.');
+      return;
+    }
     if (editForm.startTime && editForm.endTime && new Date(editForm.endTime) <= new Date(editForm.startTime)) {
       setSaveError('End time must be after start time.');
       return;
@@ -117,6 +129,8 @@ export default function AuctionDetailPage() {
       const payload: UpdateAuctionPayload = {
         title:       editForm.title,
         description: editForm.description || undefined,
+        quantity: Number(editForm.quantity),
+        unit: editForm.unit.trim(),
         ceilingPrice: Math.round(parseFloat(editForm.ceilingPriceRupees) * 100),
         minDecrement: Math.round(parseFloat(editForm.minDecrementRupees) * 100),
         startTime:   editForm.startTime ? new Date(editForm.startTime).toISOString() : undefined,
@@ -262,6 +276,10 @@ export default function AuctionDetailPage() {
       {/* Details grid */}
       <div className="grid grid-cols-3 gap-3">
         {[
+          {
+            label: 'Quantity',
+            value: `${auction.quantity} ${auction.unit}`,
+          },
           {
             label: isForward ? 'Floor Price' : 'Ceiling Price',
             value: formatCurrency(auction.ceiling_price),
@@ -419,6 +437,28 @@ export default function AuctionDetailPage() {
                 rows={2}
                 className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200 resize-none"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Quantity</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Unit</label>
+                <input
+                  value={editForm.unit}
+                  onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

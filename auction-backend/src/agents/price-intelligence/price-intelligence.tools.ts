@@ -4,10 +4,16 @@ import { AGENT_QUERY, PRICE_INTELLIGENCE } from '../../common/constants';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AuctionType } from '../../common/types';
 import { buildHistoricalAuctionResults } from './price-intelligence.helpers';
+import { searchSerper, type SerperSearchConfig } from '../../common/lib/serper.client';
+import { extractWebEvidenceSignals } from './price-intelligence.web';
+import type { ProcurementContext } from './price-intelligence.context';
 
 export function createPriceIntelligenceTools(
   db: SupabaseClient,
   currentAuctionType: AuctionType,
+  context: ProcurementContext,
+  serperConfig: SerperSearchConfig,
+  defaultSearchQuery: string,
 ): DynamicStructuredTool[] {
   const getHistoricalAuctionData = new DynamicStructuredTool({
     name: 'get_historical_auction_data',
@@ -64,7 +70,12 @@ export function createPriceIntelligenceTools(
         return JSON.stringify({ message: 'No performance data available for this category' });
       }
 
-      type Score = { delivery_success_rate: number | null; quality_score: number | null; total_contracts: number; defaulted_contracts: number };
+      type Score = {
+        delivery_success_rate: number | null;
+        quality_score: number | null;
+        total_contracts: number;
+        defaulted_contracts: number;
+      };
       const scores = data as Score[];
       const avgDelivery =
         scores.reduce((s, r) => s + (r.delivery_success_rate ?? 0), 0) / scores.length;
@@ -80,9 +91,7 @@ export function createPriceIntelligenceTools(
         total_contracts: totalContracts,
         total_defaults: totalDefaults,
         default_rate_pct:
-          totalContracts > 0
-            ? ((totalDefaults / totalContracts) * 100).toFixed(2)
-            : '0.00',
+          totalContracts > 0 ? ((totalDefaults / totalContracts) * 100).toFixed(2) : '0.00',
       });
     },
   });
@@ -105,8 +114,8 @@ export function createPriceIntelligenceTools(
       const mid = Math.floor(sorted.length / 2);
       const median =
         sorted.length % 2 === 0
-          ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
-          : sorted[mid];
+          ? Math.round((sorted[mid - 1]! + sorted[mid]!) / 2)
+          : sorted[mid]!;
 
       const mean = amounts.reduce((s, v) => s + v, 0) / amounts.length;
       const variance =
@@ -131,5 +140,45 @@ export function createPriceIntelligenceTools(
     },
   });
 
-  return [getHistoricalAuctionData, getCategoryRiskStats, calculatePriceStatistics];
+  const searchWebPricingEvidence = new DynamicStructuredTool({
+    name: 'search_web_pricing_evidence',
+    description:
+      'Searches the web for current market pricing evidence. Returns scored price signals extracted from live pages. Always call this first to get web evidence before relying on historical data alone.',
+    schema: z.object({
+      query: z
+        .string()
+        .describe(
+          'Search query for current market prices. Leave empty to use the pre-built query for this item.',
+        )
+        .optional(),
+    }),
+    func: async ({ query }) => {
+      const searchQuery = query?.trim() || defaultSearchQuery;
+      const results = await searchSerper(searchQuery, serperConfig);
+
+      if (results.length === 0) {
+        return JSON.stringify({ signals: [], message: 'No web results found' });
+      }
+
+      const signals = await extractWebEvidenceSignals({
+        context,
+        results,
+        timeoutMs: serperConfig.timeoutMs,
+      });
+
+      return JSON.stringify({
+        signals,
+        query_used: searchQuery,
+        raw_results_count: results.length,
+        usable_signals_count: signals.length,
+      });
+    },
+  });
+
+  return [
+    searchWebPricingEvidence,
+    getHistoricalAuctionData,
+    getCategoryRiskStats,
+    calculatePriceStatistics,
+  ];
 }

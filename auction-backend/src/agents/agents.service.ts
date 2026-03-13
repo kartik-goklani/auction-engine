@@ -507,6 +507,9 @@ export class AgentsService {
           maxResults: this.config.get<number>('SERPER_MAX_RESULTS') ?? 5,
         },
         input.description,
+        input.brandName,
+        input.modelNumber,
+        input.keySpecs,
       );
 
       const durationMs = Date.now() - startedAt;

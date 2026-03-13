@@ -26,6 +26,13 @@ const NAV_ITEMS = [
   { href: '/buyer/vendors',   label: 'Vendors',   Icon: Building2       },
 ];
 
+const primaryActionClassName =
+  'inline-flex items-center justify-center rounded-full border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] text-[var(--inverse-control-text)] shadow-[var(--inverse-control-shadow)] transition-all duration-150 hover:bg-[var(--inverse-control-hover-bg)] hover:shadow-[var(--inverse-control-shadow-hover)] active:scale-[0.97]';
+const brandMarkClassName =
+  'flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] text-[var(--inverse-control-text)] shadow-[var(--inverse-control-shadow)]';
+const profileBadgeClassName =
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] text-[11px] font-bold text-[var(--inverse-control-text)] shadow-[var(--inverse-control-shadow)]';
+
 export default function BuyerLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
@@ -65,8 +72,8 @@ export default function BuyerLayout({ children }: { children: ReactNode }) {
       <header className="h-[60px] shrink-0 bg-bg-page border-b border-border-subtle flex items-center justify-between px-6 gap-4 z-20">
         {/* Left: brand */}
         <div className="flex items-center gap-2.5 w-[200px] shrink-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent">
-            <Gavel size={15} className="text-white" />
+          <div className={brandMarkClassName}>
+            <Gavel size={15} className="text-current" />
           </div>
           <div className="leading-tight">
             <p className="text-[13px] font-bold text-text-primary tracking-tight">Auction Engine</p>
@@ -93,14 +100,12 @@ export default function BuyerLayout({ children }: { children: ReactNode }) {
 
         {/* Right: actions */}
         <div className="flex items-center gap-2">
-          <Link href="/buyer/auctions/new">
-            <button
-              type="button"
-              className="flex items-center gap-1.5 bg-accent text-white text-xs font-semibold px-4 py-2 rounded-full hover:bg-accent-hover active:scale-[0.97] transition-all duration-150"
-            >
-              <Plus size={12} />
-              New Auction
-            </button>
+          <Link
+            href="/buyer/auctions/new"
+            className={cn(primaryActionClassName, 'gap-1.5 px-4 py-2 text-xs font-semibold')}
+          >
+            <Plus size={12} />
+            New Auction
           </Link>
 
           <NotificationDropdown />
@@ -109,7 +114,7 @@ export default function BuyerLayout({ children }: { children: ReactNode }) {
 
           {/* User */}
           <div className="flex items-center gap-2.5 pl-2.5 ml-0.5 border-l border-border-subtle">
-            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-[11px] font-bold text-white shrink-0">
+            <div className={profileBadgeClassName}>
               {initials}
             </div>
             <div className="hidden sm:block">
@@ -155,7 +160,7 @@ export default function BuyerLayout({ children }: { children: ReactNode }) {
                       : 'text-text-secondary hover:bg-bg-card hover:text-text-primary',
                   )}
                 >
-                  <Icon size={15} className={active ? 'text-accent' : 'text-current'} />
+                  <Icon size={15} className="text-current" />
                   {label}
                 </Link>
               );
@@ -166,7 +171,7 @@ export default function BuyerLayout({ children }: { children: ReactNode }) {
           <div className="px-3 pb-5 pt-2">
             <div className="rounded-2xl bg-bg-card border border-border-subtle p-3.5 flex flex-col gap-2 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
               <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-accent" />
+                <Sparkles size={13} className="text-text-primary" />
                 <p className="text-[11px] font-semibold text-text-primary">AI Agents Active</p>
               </div>
               <p className="text-[10px] text-text-muted leading-relaxed">Price intelligence running on all live auctions.</p>
@@ -178,15 +183,8 @@ export default function BuyerLayout({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        {/* Main — relative + overflow-hidden so glow stays fixed as content scrolls */}
-        <main className="relative flex-1 overflow-hidden">
-          {/* Promptly-style purple ambient glow — parent is non-scrolling so this never moves */}
-          <div
-            className="bg-purple-gradient-glow pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[80%]"
-            aria-hidden="true"
-          />
-          {/* Scroll container — children scroll, glow above stays in place */}
-          <div className="relative z-10 h-full overflow-y-auto p-7">
+        <main className="flex-1 overflow-hidden bg-bg-page">
+          <div className="h-full overflow-y-auto p-7">
             {children}
           </div>
         </main>

@@ -38,22 +38,29 @@ export function PriceIntelligenceCard({
     return (
       <Card className="flex items-center gap-3 py-5">
         <Sparkles size={16} className="text-accent animate-pulse shrink-0" />
-        <p className="text-sm text-text-secondary animate-pulse">Analysing internal pricing history…</p>
+        <p className="text-sm text-text-secondary animate-pulse">Analysing current web pricing evidence…</p>
       </Card>
     );
   }
 
   if (!metadata) return null;
+  const suggestionMetadata = 'evidence_sources' in metadata ? metadata : null;
+  const hasRecommendation =
+    metadata.ceiling_price != null &&
+    metadata.suggested_decrement != null &&
+    (!suggestionMetadata || !suggestionMetadata.failure_reason);
 
   const ceilingPrice  = metadata.ceiling_price      ?? 0;
   const minDecrement  = metadata.suggested_decrement ?? 0;
   const riskThreshold = metadata.risk_threshold      ?? 0;
-  const metricCards = [
-    { label: isForward ? 'Floor Price' : 'Ceiling Price', value: formatCurrency(ceilingPrice) },
-    { label: isForward ? 'Min Increment' : 'Min Decrement', value: formatCurrency(minDecrement) },
-  ];
+  const metricCards = hasRecommendation
+    ? [
+        { label: isForward ? 'Floor Price' : 'Ceiling Price', value: formatCurrency(ceilingPrice) },
+        { label: isForward ? 'Min Increment' : 'Min Decrement', value: formatCurrency(minDecrement) },
+      ]
+    : [];
 
-  if (!isForward && metadata.risk_threshold != null) {
+  if (hasRecommendation && !isForward && metadata.risk_threshold != null) {
     metricCards.push({ label: 'Risk Threshold', value: formatCurrency(riskThreshold) });
   }
 
@@ -82,19 +89,52 @@ export function PriceIntelligenceCard({
         </div>
       </div>
 
-      <div className={cn('grid gap-3', metricCards.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
-        {metricCards.map(({ label, value }) => (
-          <div key={label} className="rounded-lg bg-bg-elevated px-3 py-2.5">
-            <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
-            <p className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</p>
-          </div>
-        ))}
-      </div>
+      {metricCards.length > 0 ? (
+        <div className={cn('grid gap-3', metricCards.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
+          {metricCards.map(({ label, value }) => (
+            <div key={label} className="rounded-lg bg-bg-elevated px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
+              <p className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-warning/25 bg-warning/5 px-3 py-3">
+          <p className="text-xs font-medium text-text-primary">Not Enough Pricing Evidence</p>
+          <p className="mt-1 text-xs text-text-secondary">
+            The agent could not find enough credible current web pricing signals to auto-fill values safely.
+          </p>
+        </div>
+      )}
 
       {summary && (
         <p className="text-xs text-text-secondary leading-relaxed">
           {summary}
         </p>
+      )}
+
+      {suggestionMetadata && suggestionMetadata.evidence_sources.length > 0 && (
+        <div className="border-t border-border-subtle pt-3">
+          <p className="text-[10px] uppercase tracking-wider text-text-muted mb-2">
+            Supporting Sources • {suggestionMetadata.market_context}
+          </p>
+          <div className="flex flex-col gap-2">
+            {suggestionMetadata.evidence_sources.map((source) => (
+              <a
+                key={source.url}
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg bg-bg-elevated px-3 py-2 text-xs text-text-secondary hover:text-text-primary transition-colors"
+              >
+                <span className="font-medium text-text-primary">{source.title}</span>
+                <span className="block text-text-muted mt-0.5">
+                  {source.domain} • {source.source_type.replace(/_/g, ' ')}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
       )}
 
       {metadata.risk_note && !isForward && (
@@ -103,18 +143,20 @@ export function PriceIntelligenceCard({
         </p>
       )}
 
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => onApply({
-          ceilingPrice,
-          minDecrement,
-          riskThreshold: metadata.risk_threshold,
-        })}
-        className="self-start"
-      >
-        Apply Suggestions
-      </Button>
+      {hasRecommendation && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onApply({
+            ceilingPrice,
+            minDecrement,
+            riskThreshold: metadata.risk_threshold,
+          })}
+          className="self-start"
+        >
+          Apply Suggestions
+        </Button>
+      )}
     </Card>
   );
 }

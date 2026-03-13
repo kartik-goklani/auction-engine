@@ -1,7 +1,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -11,9 +11,11 @@ interface ThemeToggleProps {
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const { resolvedTheme, setTheme } = useTheme();
-  // Avoid hydration mismatch — render nothing until mounted
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   if (!mounted) {
     return <div className="w-8 h-8" />;
@@ -26,7 +28,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       type="button"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       className={cn(
-        'p-2 rounded-full transition-colors duration-150',
+        'flex h-8 w-8 items-center justify-center rounded-lg border border-border-subtle bg-bg-card transition-colors duration-150',
         'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
         className,
       )}

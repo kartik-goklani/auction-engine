@@ -1,10 +1,10 @@
 import type { AwardRecommendationRow, VendorRow } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ConfidenceLevel } from '@/lib/types';
 import { Trophy, ShieldAlert } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface AgentRecommendationCardProps {
   recommendation: AwardRecommendationRow;
@@ -76,20 +76,16 @@ export function AgentRecommendationCard({
       )}
 
       {onAward && !awarded && (
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="md"
           onClick={onAward}
-          disabled={awardLoading}
-          className={cn(
-            'self-start inline-flex items-center gap-2 rounded-lg px-4 py-2',
-            'bg-accent text-white text-sm font-semibold',
-            'border border-accent/30 shadow-[0_4px_16px_rgba(124,92,252,0.35)]',
-            'hover:bg-accent-hover transition-all duration-200',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-          )}
+          loading={awardLoading}
+          className="self-start rounded-lg"
         >
-          {awardLoading ? 'Awarding…' : 'Award Contract'}
-        </button>
+          Award Contract
+        </Button>
       )}
 
       {awarded && (

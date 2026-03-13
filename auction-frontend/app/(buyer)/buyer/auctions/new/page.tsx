@@ -39,6 +39,11 @@ interface FormState {
   categoryKey: string;
   /** Free-text entered when categoryKey === '__OTHER__' */
   categoryCustom: string;
+  quantity: string;
+  unit: string;
+  brandName: string;
+  modelNumber: string;
+  keySpecs: string;
   auctionType: AuctionType;
   visibility: AuctionVisibility;
   startTime: string;
@@ -54,6 +59,8 @@ interface FormState {
 const INITIAL: FormState = {
   title: '', description: '',
   categoryKey: '', categoryCustom: '',
+  quantity: '', unit: '',
+  brandName: '', modelNumber: '', keySpecs: '',
   auctionType: AuctionType.REVERSE,
   visibility: AuctionVisibility.RANK,
   startTime: '', endTime: '',
@@ -96,12 +103,22 @@ export default function NewAuctionPage() {
   async function triggerPriceIntelligence() {
     const title = form.title.trim();
     const category = resolveCategory(form);
+    const quantity = Number(form.quantity);
+    const unit = form.unit.trim();
     if (!title) {
       setError('Enter an auction title before running AI Suggest.');
       return;
     }
     if (!category) {
       setError('Select a category before running AI Suggest.');
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setError('Enter a valid quantity before running AI Suggest.');
+      return;
+    }
+    if (!unit) {
+      setError('Enter a unit before running AI Suggest.');
       return;
     }
     setError('');
@@ -111,6 +128,11 @@ export default function NewAuctionPage() {
         title,
         description: form.description.trim() || undefined,
         category,
+        quantity,
+        unit,
+        brandName: form.brandName.trim() || undefined,
+        modelNumber: form.modelNumber.trim() || undefined,
+        keySpecs: form.keySpecs.trim() || undefined,
         type: form.auctionType,
       });
       setAiSuggestion(suggestion);
@@ -149,8 +171,18 @@ export default function NewAuctionPage() {
       return;
     }
     const category = resolveCategory(form);
+    const quantity = Number(form.quantity);
+    const unit = form.unit.trim();
     if (!category) {
       setError('Please select a category.');
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setError('Please enter a valid quantity.');
+      return;
+    }
+    if (!unit) {
+      setError('Please enter a unit.');
       return;
     }
     setSubmitting(true);
@@ -159,6 +191,11 @@ export default function NewAuctionPage() {
         title:               form.title,
         description:         form.description,
         category,
+        quantity,
+        unit,
+        brandName: form.brandName.trim() || undefined,
+        modelNumber: form.modelNumber.trim() || undefined,
+        keySpecs: form.keySpecs.trim() || undefined,
         type:              form.auctionType,
         visibility:          form.visibility,
         // Convert local datetime-local strings to UTC ISO strings (Bug 3 fix)
@@ -216,6 +253,32 @@ export default function NewAuctionPage() {
                 className="w-full bg-bg-input text-text-primary text-sm px-4 py-2.5 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 transition-all duration-200 resize-none placeholder:text-text-muted"
               />
             </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Input
+                label="Brand"
+                value={form.brandName}
+                onChange={(e) => patch({ brandName: e.target.value })}
+                placeholder="e.g. Apple"
+              />
+              <Input
+                label="Model"
+                value={form.modelNumber}
+                onChange={(e) => patch({ modelNumber: e.target.value })}
+                placeholder="e.g. Mac mini M4"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5">
+                Key Specs
+              </label>
+              <textarea
+                value={form.keySpecs}
+                onChange={(e) => patch({ keySpecs: e.target.value })}
+                placeholder="e.g. 16GB RAM, 256GB SSD"
+                rows={2}
+                className="w-full bg-bg-input text-text-primary text-sm px-4 py-2.5 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 transition-all duration-200 resize-none placeholder:text-text-muted"
+              />
+            </div>
 
             {/* Category dropdown (Bug 1) */}
             <div>
@@ -244,6 +307,25 @@ export default function NewAuctionPage() {
                   className="mt-2 w-full bg-bg-input text-text-primary text-sm px-4 py-2.5 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 transition-all duration-200 placeholder:text-text-muted"
                 />
               )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Quantity"
+                type="number"
+                min={0}
+                step={1}
+                value={form.quantity}
+                onChange={(e) => patch({ quantity: e.target.value })}
+                placeholder="e.g. 50"
+                required
+              />
+              <Input
+                label="Unit"
+                value={form.unit}
+                onChange={(e) => patch({ unit: e.target.value })}
+                placeholder="e.g. laptops, licenses, kg"
+                required
+              />
             </div>
           </div>
         </Card>
@@ -398,8 +480,8 @@ export default function NewAuctionPage() {
       >
         <div className="flex flex-col gap-4">
           <p className="text-xs text-text-muted">
-            The Price Intelligence agent analysed internal auction history, pricing patterns, and vendor-risk data for <strong>{resolveCategory(form)}</strong>.
-            Review the suggestions below and click Apply to populate the pricing fields.
+            The Price Intelligence agent analysed current web pricing evidence and vendor-risk data for <strong>{resolveCategory(form)}</strong>.
+            Review the suggestions below. If the evidence is strong enough, you can apply the pricing values directly to the form.
           </p>
           <PriceIntelligenceCard
             metadata={aiSuggestion}
