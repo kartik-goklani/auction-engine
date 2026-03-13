@@ -92,7 +92,7 @@ export default function BuyerDashboardPage() {
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-text-primary">All Auctions</h2>
-          <Link href="/buyer/auctions" className="text-xs text-accent hover:underline">
+          <Link href="/buyer/auctions" className="text-xs text-text-secondary hover:underline">
             View all
           </Link>
         </div>

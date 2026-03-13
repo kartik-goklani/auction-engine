@@ -11,29 +11,26 @@ interface AuctionCardProps {
   onClick?: () => void;
 }
 
-const STATUS_ACCENT: Record<AuctionStatus, string> = {
-  [AuctionStatus.DRAFT]:     'bg-border-default',
-  [AuctionStatus.PUBLISHED]: 'bg-warning',
-  [AuctionStatus.OPEN]:      'bg-success',
-  [AuctionStatus.CLOSED]:    'bg-text-muted',
-  [AuctionStatus.AWARDED]:   'bg-accent',
-  [AuctionStatus.CANCELLED]: 'bg-danger',
+const STATUS_BORDER: Record<AuctionStatus, string> = {
+  [AuctionStatus.DRAFT]:     'border-l-border-default',
+  [AuctionStatus.PUBLISHED]: 'border-l-warning',
+  [AuctionStatus.OPEN]:      'border-l-success',
+  [AuctionStatus.CLOSED]:    'border-l-text-muted',
+  [AuctionStatus.AWARDED]:   'border-l-accent',
+  [AuctionStatus.CANCELLED]: 'border-l-danger',
 };
 
 export function AuctionCard({ auction, onClick }: AuctionCardProps) {
   const isLive     = auction.status === AuctionStatus.OPEN;
   const hasCeiling = auction.ceiling_price != null;
-  const accentBar  = STATUS_ACCENT[auction.status] ?? 'bg-border-default';
+  const borderLeft = STATUS_BORDER[auction.status] ?? 'border-l-border-default';
 
   return (
     <Card
       interactive={!!onClick}
       onClick={onClick}
-      className="relative flex flex-col gap-0 overflow-hidden p-0"
+      className={`flex flex-col gap-0 p-0 border-l-4 ${borderLeft}`}
     >
-      {/* Status accent bar — left edge colour-coded by status */}
-      <div className={`absolute left-0 top-0 h-full w-[3px] ${accentBar}`} />
-
       {/* Main content */}
       <div className="flex flex-col gap-3 px-4 pb-3 pt-4 pl-5">
         {/* Header row: title + badges */}
