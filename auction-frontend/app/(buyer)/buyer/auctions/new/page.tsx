@@ -54,6 +54,10 @@ interface FormState {
   riskThresholdRupees: string;
   autoExtendTriggerMin: string;
   autoExtendMin: string;
+  // Traffic light
+  trafficLightEnabled: boolean;
+  trafficLightGreenPct: string;
+  trafficLightYellowPct: string;
 }
 
 const INITIAL: FormState = {
@@ -66,6 +70,7 @@ const INITIAL: FormState = {
   startTime: '', endTime: '',
   ceilingPriceRupees: '', minDecrementRupees: '', riskThresholdRupees: '',
   autoExtendTriggerMin: '5', autoExtendMin: '5',
+  trafficLightEnabled: false, trafficLightGreenPct: '5', trafficLightYellowPct: '15',
 };
 
 function rupeesToPaise(rupees: string): number {
@@ -185,6 +190,22 @@ export default function NewAuctionPage() {
       setError('Please enter a unit.');
       return;
     }
+    if (form.trafficLightEnabled) {
+      const gPct = Number(form.trafficLightGreenPct);
+      const yPct = Number(form.trafficLightYellowPct);
+      if (!Number.isFinite(gPct) || gPct < 1 || gPct > 50) {
+        setError('Green threshold must be between 1 and 50.');
+        return;
+      }
+      if (!Number.isFinite(yPct) || yPct < 2 || yPct > 99) {
+        setError('Yellow threshold must be between 2 and 99.');
+        return;
+      }
+      if (gPct >= yPct) {
+        setError('Yellow threshold must be greater than green threshold.');
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const auction = await auctionsApi.create({
@@ -205,6 +226,9 @@ export default function NewAuctionPage() {
         minDecrement:       rupeesToPaise(form.minDecrementRupees),
         autoExtendTrigger: parseInt(form.autoExtendTriggerMin) || 5,
         autoExtendMinutes: parseInt(form.autoExtendMin)        || 5,
+        trafficLightEnabled:   form.trafficLightEnabled || undefined,
+        trafficLightGreenPct:  form.trafficLightEnabled ? Number(form.trafficLightGreenPct)  : undefined,
+        trafficLightYellowPct: form.trafficLightEnabled ? Number(form.trafficLightYellowPct) : undefined,
       });
       router.push(`/buyer/auctions/${auction.id}`);
     } catch (err: unknown) {
@@ -431,6 +455,75 @@ export default function NewAuctionPage() {
             </div>
           </Card>
         </div>
+
+        {/* Traffic Light Config — not shown for SEALED_BID (signals are always DISABLED there) */}
+        {form.auctionType !== AuctionType.SEALED_BID && (
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-text-primary">Competitiveness Signal</h2>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Show suppliers a colour signal after each bid — without revealing the actual price
+                </p>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={form.trafficLightEnabled}
+                  onChange={(e) => patch({ trafficLightEnabled: e.target.checked })}
+                />
+                <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-accent peer-focus:ring-2 peer-focus:ring-accent/30 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4" />
+              </label>
+            </div>
+
+            {form.trafficLightEnabled && (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Green threshold (%)"
+                    type="number"
+                    min={1}
+                    max={50}
+                    step={1}
+                    value={form.trafficLightGreenPct}
+                    onChange={(e) => patch({ trafficLightGreenPct: e.target.value })}
+                    hint="Vendor is within this % of best price"
+                  />
+                  <Input
+                    label="Yellow threshold (%)"
+                    type="number"
+                    min={2}
+                    max={99}
+                    step={1}
+                    value={form.trafficLightYellowPct}
+                    onChange={(e) => patch({ trafficLightYellowPct: e.target.value })}
+                    hint="Must be greater than green threshold"
+                  />
+                </div>
+
+                {/* Live preview */}
+                <div className="flex items-center gap-4 rounded-lg border border-border-default bg-bg-elevated px-4 py-2.5 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-green-700 font-medium">Competitive</span>
+                    <span className="text-text-muted ml-1">within {form.trafficLightGreenPct || '?'}%</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                    <span className="text-amber-700 font-medium">Marginal</span>
+                    <span className="text-text-muted ml-1">{form.trafficLightGreenPct || '?'}–{form.trafficLightYellowPct || '?'}%</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                    <span className="text-red-700 font-medium">Not competitive</span>
+                    <span className="text-text-muted ml-1">above {form.trafficLightYellowPct || '?'}%</span>
+                  </span>
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Auto-extension */}
         <Card>

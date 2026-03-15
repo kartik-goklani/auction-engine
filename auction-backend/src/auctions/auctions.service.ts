@@ -15,6 +15,7 @@ import { AgentsService } from '../agents/agents.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { VendorsService } from '../vendors/vendors.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import {
   AuctionStatus,
   ActorType,
@@ -29,7 +30,8 @@ import type { CreateLotDto } from './dto/create-lot.dto';
 const VALID_TRANSITIONS: Record<AuctionStatus, AuctionStatus[]> = {
   [AuctionStatus.DRAFT]: [AuctionStatus.PUBLISHED, AuctionStatus.CANCELLED],
   [AuctionStatus.PUBLISHED]: [AuctionStatus.OPEN, AuctionStatus.CANCELLED],
-  [AuctionStatus.OPEN]: [AuctionStatus.CLOSED, AuctionStatus.CANCELLED],
+  [AuctionStatus.OPEN]: [AuctionStatus.PAUSED, AuctionStatus.CLOSED, AuctionStatus.CANCELLED],
+  [AuctionStatus.PAUSED]: [AuctionStatus.OPEN, AuctionStatus.CLOSED, AuctionStatus.CANCELLED],
   [AuctionStatus.CLOSED]: [AuctionStatus.AWARDED, AuctionStatus.CANCELLED],
   [AuctionStatus.AWARDED]: [AuctionStatus.CANCELLED],
   [AuctionStatus.CANCELLED]: [],
@@ -43,6 +45,7 @@ export class AuctionsService {
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
     private readonly vendorsService: VendorsService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   async create(buyerId: string, dto: CreateAuctionDto): Promise<AuctionRow> {
@@ -104,7 +107,8 @@ export class AuctionsService {
       'title' | 'description' | 'category' | 'start_time' | 'end_time' |
       'quantity' | 'unit' | 'ceiling_price' | 'reserve_price' | 'min_decrement' |
       'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility' |
-      'brand_name' | 'model_number' | 'key_specs'
+      'brand_name' | 'model_number' | 'key_specs' |
+      'traffic_light_enabled' | 'traffic_light_green_pct' | 'traffic_light_yellow_pct'
     >> = {};
     if (dto.title            !== undefined) patch.title                = dto.title;
     if (dto.description      !== undefined) patch.description          = dto.description;
@@ -120,9 +124,12 @@ export class AuctionsService {
     if (dto.autoExtendMinutes !== undefined) patch.auto_extend_minutes = dto.autoExtendMinutes;
     if (dto.autoExtendTrigger !== undefined) patch.auto_extend_trigger = dto.autoExtendTrigger;
     if (dto.visibility       !== undefined) patch.visibility           = dto.visibility;
-    if (dto.brandName        !== undefined) patch.brand_name           = dto.brandName ?? null;
-    if (dto.modelNumber      !== undefined) patch.model_number         = dto.modelNumber ?? null;
-    if (dto.keySpecs         !== undefined) patch.key_specs            = dto.keySpecs ?? null;
+    if (dto.brandName              !== undefined) patch.brand_name                = dto.brandName ?? null;
+    if (dto.modelNumber            !== undefined) patch.model_number              = dto.modelNumber ?? null;
+    if (dto.keySpecs               !== undefined) patch.key_specs                 = dto.keySpecs ?? null;
+    if (dto.trafficLightEnabled    !== undefined) patch.traffic_light_enabled     = dto.trafficLightEnabled;
+    if (dto.trafficLightGreenPct   !== undefined) patch.traffic_light_green_pct   = dto.trafficLightGreenPct;
+    if (dto.trafficLightYellowPct  !== undefined) patch.traffic_light_yellow_pct  = dto.trafficLightYellowPct;
 
     // Validate that effective end_time > effective start_time
     const effectiveStart = patch.start_time ?? auction.start_time;
@@ -202,6 +209,58 @@ export class AuctionsService {
     this.agentsService.runAwardRecommendation(auction.id);
 
     return auction;
+  }
+
+  async pause(id: string, buyerId: string, reason?: string): Promise<AuctionRow> {
+    const auction = await this.auctionsRepository.findById(id);
+    this.assertOwner(auction, buyerId);
+
+    if (auction.status !== AuctionStatus.OPEN) {
+      throw new BadRequestException('Auction can only be paused when OPEN');
+    }
+
+    const updated = await this.auctionsRepository.updateStatus(id, AuctionStatus.PAUSED, {
+      paused_at: new Date().toISOString(),
+      paused_by: buyerId,
+      pause_reason: reason ?? null,
+    });
+
+    this.auditService.log({
+      auctionId: id,
+      actorId: buyerId,
+      actorType: ActorType.BUYER,
+      action: 'AUCTION_PAUSED',
+      metadata: { reason },
+    });
+
+    this.realtimeService.emitAuctionPaused(id, reason);
+
+    return updated;
+  }
+
+  async resume(id: string, buyerId: string): Promise<AuctionRow> {
+    const auction = await this.auctionsRepository.findById(id);
+    this.assertOwner(auction, buyerId);
+
+    if (auction.status !== AuctionStatus.PAUSED) {
+      throw new BadRequestException('Auction can only be resumed when PAUSED');
+    }
+
+    const updated = await this.auctionsRepository.updateStatus(id, AuctionStatus.OPEN, {
+      resumed_at: new Date().toISOString(),
+      resumed_by: buyerId,
+    });
+
+    this.auditService.log({
+      auctionId: id,
+      actorId: buyerId,
+      actorType: ActorType.BUYER,
+      action: 'AUCTION_RESUMED',
+    });
+
+    this.realtimeService.emitAuctionResumed(id);
+
+    return updated;
   }
 
   async award(id: string, buyerId: string, winningVendorId: string): Promise<AuctionRow> {

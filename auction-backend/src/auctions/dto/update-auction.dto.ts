@@ -3,9 +3,11 @@ import {
   IsEnum,
   IsInt,
   IsISO8601,
+  IsNumber,
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -92,4 +94,20 @@ export class UpdateAuctionDto {
   @IsString()
   @MaxLength(500)
   keySpecs?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  trafficLightEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(50)
+  trafficLightGreenPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(2)
+  @Max(99)
+  trafficLightYellowPct?: number;
 }

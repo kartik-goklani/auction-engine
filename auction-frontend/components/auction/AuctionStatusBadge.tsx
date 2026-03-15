@@ -8,6 +8,7 @@ const STATUS_CONFIG: Record<
   [AuctionStatus.DRAFT]:     { label: 'Draft',     variant: 'elevated' },
   [AuctionStatus.PUBLISHED]: { label: 'Scheduled', variant: 'info'     },
   [AuctionStatus.OPEN]:      { label: 'Live',       variant: 'success'  },
+  [AuctionStatus.PAUSED]:    { label: 'Paused',     variant: 'warning'  },
   [AuctionStatus.CLOSED]:    { label: 'Closed',     variant: 'warning'  },
   [AuctionStatus.AWARDED]:   { label: 'Awarded',    variant: 'success'  },
   [AuctionStatus.CANCELLED]: { label: 'Cancelled',  variant: 'danger'   },

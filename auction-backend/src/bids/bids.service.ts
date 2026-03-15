@@ -18,6 +18,7 @@ import {
   AuctionStatus,
 } from '../common/types';
 import type { AuctionRow } from '../auctions/auctions.repository';
+import { computeTrafficLight } from './traffic-light.util';
 
 @Injectable()
 export class BidsService {
@@ -36,6 +37,24 @@ export class BidsService {
     vendorUserId: string,
     amount: number,
   ): Promise<BidRpcResult> {
+    // Early-exit if the auction is paused — before any DB round-trips
+    const auctionCheck = await this.auctionsService.findByIdPublic(auctionId);
+    if (auctionCheck.status === AuctionStatus.PAUSED) {
+      this.realtimeService.emitToUser(vendorUserId, 'bid_rejected', {
+        reason: 'AUCTION_PAUSED',
+        submittedAmount: amount,
+      });
+      return {
+        id: '',
+        auction_id: auctionId,
+        vendor_id: '',
+        amount,
+        status: BidStatus.REJECTED,
+        rejection_reason: 'AUCTION_PAUSED',
+        submitted_at: new Date().toISOString(),
+      } as BidRpcResult;
+    }
+
     // Resolve vendor DB id from auth user id
     const vendorId = await this.vendorsService.getVendorIdByUserId(vendorUserId);
 
@@ -100,11 +119,23 @@ export class BidsService {
       );
     }
 
+    // Compute traffic light for the bidding vendor — they just set the new best price
+    const bidderTrafficLight = (auction.traffic_light_enabled && auction.type !== AuctionType.SEALED_BID)
+      ? computeTrafficLight(
+          auction.type as AuctionType,
+          bid.amount,
+          bid.amount, // vendor just set the best price — always GREEN at bid moment
+          auction.traffic_light_green_pct,
+          auction.traffic_light_yellow_pct,
+        )
+      : undefined;
+
     // Emit bid_confirmed privately to the bidding vendor
     this.realtimeService.emitToUser(vendorUserId, 'bid_confirmed', {
       bidId: bid.id,
       amount: bid.amount,
       status: bid.status,
+      ...(bidderTrafficLight !== undefined && { traffic_light: bidderTrafficLight }),
     });
 
     // Emit updated rank privately to EVERY vendor who has bid (visibility-enforced inside RealtimeService)
@@ -112,17 +143,28 @@ export class BidsService {
     const acceptedCount = await this.vendorsService.countAcceptedInvitations(auctionId);
 
     await Promise.all(
-      Array.from(ranks.entries()).map(async ([vId, rank]) => {
+      Array.from(ranks.entries()).map(async ([vId, { rank, amount: vBidAmount }]) => {
         const userId = await this.vendorsService.getUserIdByVendorId(vId);
-        if (userId) {
-          this.realtimeService.emitRankToVendor(
-            userId,
-            auction.type as AuctionType,
-            auction.visibility,
-            rank,
-            acceptedCount,
-          );
-        }
+        if (!userId) return;
+
+        const rankTrafficLight = (auction.traffic_light_enabled && auction.type !== AuctionType.SEALED_BID)
+          ? computeTrafficLight(
+              auction.type as AuctionType,
+              vBidAmount,
+              bid.amount, // bid.amount is always the new current best price
+              auction.traffic_light_green_pct,
+              auction.traffic_light_yellow_pct,
+            )
+          : undefined;
+
+        this.realtimeService.emitRankToVendor(
+          userId,
+          auction.type as AuctionType,
+          auction.visibility,
+          rank,
+          acceptedCount,
+          rankTrafficLight,
+        );
       }),
     );
 
@@ -212,7 +254,9 @@ export class BidsService {
     return {
       bestBid,
       totalBids,
-      ranks: Object.fromEntries(ranksMap),
+      ranks: Object.fromEntries(
+        Array.from(ranksMap.entries()).map(([vId, { rank }]) => [vId, rank]),
+      ),
       acceptedVendorCount,
     };
   }

@@ -9,6 +9,7 @@ import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { AuthModule } from '../auth/auth.module';
+import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AuthModule } from '../auth/auth.module';
     NotificationsModule,
     VendorsModule,
     AuthModule,
+    RealtimeModule,
   ],
   controllers: [AuctionsController],
   providers: [AuctionsService, AuctionsRepository, AuctionsScheduler],

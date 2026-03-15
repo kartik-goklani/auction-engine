@@ -6,15 +6,18 @@ import {
   connectSocket, joinAuction, leaveAuction,
   onBidAccepted, onBidRejected, onBidConfirmed,
   onAuctionExtended, onAuctionClosed, onYourRank, onOutbid,
+  onAuctionPaused, onAuctionResumed,
 } from '@/lib/socket';
 import { auctionsApi, bidsApi, invitationsApi } from '@/lib/api';
 import { getAccessToken } from '@/lib/supabase';
 import type { AuctionRow, InvitationRow, YourRankPayload } from '@/lib/types';
-import { AuctionType, AuctionVisibility, InvitationStatus } from '@/lib/types';
+import { AuctionType, AuctionVisibility, InvitationStatus, TrafficLightStatus } from '@/lib/types';
 import { AuctionStatusBadge } from '@/components/auction/AuctionStatusBadge';
 import { AuctionTimer } from '@/components/auction/AuctionTimer';
+import { AuctionPausedVendorBanner } from '@/components/auction/AuctionPausedVendorBanner';
 import { BidInput } from '@/components/bid/BidInput';
 import { RankBadge } from '@/components/bid/RankBadge';
+import { TrafficLightBadge } from '@/components/bid/TrafficLightBadge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
@@ -42,6 +45,9 @@ export default function VendorBidPage() {
   const [accessModalOpen, setAccessModalOpen] = useState(false);
   const [responding,   setResponding]   = useState(false);
   const [loading,      setLoading]      = useState(true);
+  const [isPaused,     setIsPaused]     = useState(false);
+  const [pauseReason,  setPauseReason]  = useState<string | undefined>();
+  const [trafficLight, setTrafficLight] = useState<TrafficLightStatus>(TrafficLightStatus.DISABLED);
 
   function showToast(message: string, kind: ToastKind) {
     setToast({ message, kind });
@@ -99,10 +105,12 @@ export default function VendorBidPage() {
       });
       const offBidConfirmed = onBidConfirmed((p) => {
         showToast(`Bid ${formatCurrency(p.amount)} confirmed!`, 'success');
+        if (p.traffic_light) setTrafficLight(p.traffic_light);
       });
       const offYourRank = onYourRank((p) => {
         setRankInfo(p);
         setTotalVendors(p.totalActiveBidders);
+        if (p.traffic_light) setTrafficLight(p.traffic_light);
       });
       const offOutbid = onOutbid((p) => {
         setOutbid(true);
@@ -117,6 +125,15 @@ export default function VendorBidPage() {
         showToast('Auction closed! Redirecting to results…', 'info');
         setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3000);
       });
+      const offPaused = onAuctionPaused((p) => {
+        setIsPaused(true);
+        setPauseReason(p.reason);
+      });
+      const offResumed = onAuctionResumed(() => {
+        setIsPaused(false);
+        setPauseReason(undefined);
+        showToast('Auction has resumed — bidding is live again', 'info');
+      });
 
       cleanup = () => {
         offBidAccepted();
@@ -126,6 +143,8 @@ export default function VendorBidPage() {
         offOutbid();
         offExtended();
         offClosed();
+        offPaused();
+        offResumed();
         leaveAuction(id);
       };
     });
@@ -158,6 +177,7 @@ export default function VendorBidPage() {
   const isSealed   = auction.type === AuctionType.SEALED_BID;
   const showRank   = !isSealed && auction.visibility !== AuctionVisibility.BLIND && (rankInfo !== null || totalVendors > 0);
   const showPrice  = !isSealed && auction.visibility === AuctionVisibility.PRICE;
+  const showTrafficLight = !isSealed && auction.traffic_light_enabled;
   const direction  = auction.type === AuctionType.FORWARD ? 'FORWARD' : 'REVERSE';
   const canJoinAuction = invitation?.status === InvitationStatus.ACCEPTED;
 
@@ -178,8 +198,11 @@ export default function VendorBidPage() {
         </div>
       </div>
 
+      {/* Paused banner */}
+      {isPaused && <AuctionPausedVendorBanner reason={pauseReason} />}
+
       {/* Outbid banner */}
-      {outbid && (
+      {outbid && !isPaused && (
         <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
           <AlertCircle size={14} className="text-warning shrink-0" />
           <p className="text-xs font-medium text-warning">You have been outbid!</p>
@@ -222,7 +245,7 @@ export default function VendorBidPage() {
         )}
       </div>
 
-      {/* Rank badge */}
+      {/* Rank + traffic light */}
       {showRank && (
         <Card className="flex items-center gap-4">
           <div>
@@ -232,6 +255,15 @@ export default function VendorBidPage() {
               totalBidders={rankInfo?.totalActiveBidders ?? totalVendors}
             />
           </div>
+          {showTrafficLight && (
+            <div className="ml-auto">
+              <TrafficLightBadge
+                status={trafficLight}
+                greenPct={auction.traffic_light_green_pct}
+                yellowPct={auction.traffic_light_yellow_pct}
+              />
+            </div>
+          )}
         </Card>
       )}
 
@@ -248,12 +280,17 @@ export default function VendorBidPage() {
       <Card>
         <h2 className="text-sm font-semibold text-text-primary mb-4">Place Your Bid</h2>
         {canJoinAuction ? (
-          <BidInput
-            currentBestAmount={showPrice ? currentBest : null}
-            minDecrement={auction.min_decrement ?? 0}
-            direction={direction}
-            onSubmit={handleBidSubmit}
-          />
+          <div className={cn(isPaused && 'pointer-events-none opacity-50')}>
+            <BidInput
+              currentBestAmount={showPrice ? currentBest : null}
+              minDecrement={auction.min_decrement ?? 0}
+              direction={direction}
+              onSubmit={handleBidSubmit}
+            />
+            {isPaused && (
+              <p className="mt-2 text-xs text-amber-600">Bidding is currently suspended</p>
+            )}
+          </div>
         ) : (
           <p className="text-sm text-text-secondary">
             Accept the invitation to join this live bidding room.

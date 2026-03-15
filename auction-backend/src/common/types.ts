@@ -11,9 +11,17 @@ export enum AuctionStatus {
   DRAFT = 'DRAFT',
   PUBLISHED = 'PUBLISHED',
   OPEN = 'OPEN',
+  PAUSED = 'PAUSED',
   CLOSED = 'CLOSED',
   AWARDED = 'AWARDED',
   CANCELLED = 'CANCELLED',
+}
+
+export enum TrafficLightStatus {
+  GREEN    = 'GREEN',
+  YELLOW   = 'YELLOW',
+  RED      = 'RED',
+  DISABLED = 'DISABLED',
 }
 
 export enum AuctionVisibility {

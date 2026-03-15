@@ -21,6 +21,7 @@ import { UpdateAuctionDto } from './dto/update-auction.dto';
 import { CancelAuctionDto } from './dto/cancel-auction.dto';
 import { ExtendAuctionDto } from './dto/extend-auction.dto';
 import { AwardAuctionDto } from './dto/award-auction.dto';
+import { PauseAuctionDto } from './dto/pause-auction.dto';
 import { CreateLotDto } from './dto/create-lot.dto';
 
 @Controller('auctions')
@@ -110,6 +111,20 @@ export class AuctionsController {
   @Post(':id/clone')
   clone(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
     return this.auctionsService.clone(id, user.id);
+  }
+
+  @Post(':id/pause')
+  pause(
+    @Param('id') id: string,
+    @Body() dto: PauseAuctionDto,
+    @CurrentUser() user: CurrentUserType,
+  ) {
+    return this.auctionsService.pause(id, user.id, dto.reason);
+  }
+
+  @Post(':id/resume')
+  resume(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
+    return this.auctionsService.resume(id, user.id);
   }
 
   // ── Lots ──────────────────────────────────────────────────────────────────

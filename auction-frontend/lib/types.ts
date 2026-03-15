@@ -16,9 +16,17 @@ export enum AuctionStatus {
   DRAFT     = 'DRAFT',
   PUBLISHED = 'PUBLISHED',
   OPEN      = 'OPEN',
+  PAUSED    = 'PAUSED',
   CLOSED    = 'CLOSED',
   AWARDED   = 'AWARDED',
   CANCELLED = 'CANCELLED',
+}
+
+export enum TrafficLightStatus {
+  GREEN    = 'GREEN',
+  YELLOW   = 'YELLOW',
+  RED      = 'RED',
+  DISABLED = 'DISABLED',
 }
 
 export enum AuctionVisibility {
@@ -160,6 +168,14 @@ export interface AuctionRow {
   brand_name: string | null;
   model_number: string | null;
   key_specs: string | null;
+  paused_at: string | null;
+  paused_by: string | null;
+  pause_reason: string | null;
+  resumed_at: string | null;
+  resumed_by: string | null;
+  traffic_light_enabled: boolean;
+  traffic_light_green_pct: number;
+  traffic_light_yellow_pct: number;
   created_at: string;
   updated_at: string;
 }
@@ -205,6 +221,9 @@ export interface CreateAuctionPayload {
   autoExtendMinutes?: number;
   autoExtendTrigger?: number;
   visibility?: AuctionVisibility;
+  trafficLightEnabled?: boolean;
+  trafficLightGreenPct?: number;
+  trafficLightYellowPct?: number;
 }
 
 export interface CreateLotPayload {
@@ -463,6 +482,7 @@ export interface AlertRaisedPayload {
 export interface YourRankPayload {
   rank: number;
   totalActiveBidders: number;
+  traffic_light?: TrafficLightStatus;
 }
 
 export interface OutbidPayload {
@@ -474,6 +494,18 @@ export interface BidConfirmedPayload {
   bidId: string;
   amount: number;              // paise
   status: string;
+  traffic_light?: TrafficLightStatus;
+}
+
+export interface AuctionPausedPayload {
+  auctionId: string;
+  reason?: string;
+  pausedAt: string;
+}
+
+export interface AuctionResumedPayload {
+  auctionId: string;
+  resumedAt: string;
 }
 
 /** Client → Server */

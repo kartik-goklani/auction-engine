@@ -21,6 +21,8 @@ import type {
   OutbidPayload,
   BidConfirmedPayload,
   NotificationEventPayload,
+  AuctionPausedPayload,
+  AuctionResumedPayload,
 } from './types';
 
 // ─── Singleton ───────────────────────────────────────────────────────────────
@@ -132,6 +134,20 @@ export function onNotification(
 ): () => void {
   getSocket().on('notification', handler);
   return () => getSocket().off('notification', handler);
+}
+
+export function onAuctionPaused(
+  handler: (payload: AuctionPausedPayload) => void,
+): () => void {
+  getSocket().on('auction_paused', handler);
+  return () => getSocket().off('auction_paused', handler);
+}
+
+export function onAuctionResumed(
+  handler: (payload: AuctionResumedPayload) => void,
+): () => void {
+  getSocket().on('auction_resumed', handler);
+  return () => getSocket().off('auction_resumed', handler);
 }
 
 export interface AgentRunCompletedPayload {

@@ -135,8 +135,11 @@ export class BidsRepository {
     return count ?? 0;
   }
 
-  /** Returns ranks as: Map<vendorId, rank> */
-  async getVendorRanks(auctionId: string, auctionType: string): Promise<Map<string, number>> {
+  /** Returns ranks as: Map<vendorId, { rank, amount }> */
+  async getVendorRanks(
+    auctionId: string,
+    auctionType: string,
+  ): Promise<Map<string, { rank: number; amount: number }>> {
     const ascending = auctionType !== 'FORWARD';
     const { data } = await this.db
       .getClient()
@@ -146,14 +149,14 @@ export class BidsRepository {
       .eq('status', 'ACCEPTED')
       .order('amount', { ascending });
 
-    const ranks = new Map<string, number>();
+    const ranks = new Map<string, { rank: number; amount: number }>();
     const seen = new Set<string>();
     let rank = 1;
 
     for (const row of (data ?? []) as { vendor_id: string; amount: number }[]) {
       if (!seen.has(row.vendor_id)) {
         seen.add(row.vendor_id);
-        ranks.set(row.vendor_id, rank++);
+        ranks.set(row.vendor_id, { rank: rank++, amount: row.amount });
       }
     }
 

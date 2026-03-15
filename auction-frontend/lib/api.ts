@@ -141,6 +141,17 @@ export const auctionsApi = {
     return apiFetch<AuctionRow>(`/auctions/${id}/clone`, { method: 'POST' });
   },
 
+  pauseAuction(id: string, reason?: string): Promise<AuctionRow> {
+    return apiFetch<AuctionRow>(`/auctions/${id}/pause`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  resumeAuction(id: string): Promise<AuctionRow> {
+    return apiFetch<AuctionRow>(`/auctions/${id}/resume`, { method: 'POST' });
+  },
+
   delete(id: string): Promise<void> {
     return apiFetch<void>(`/auctions/${id}`, { method: 'DELETE' });
   },

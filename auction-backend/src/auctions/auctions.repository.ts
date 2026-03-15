@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../common/database/database.service';
 import type { AuctionStatus, AuctionType, AuctionVisibility } from '../common/types';
-import { AUCTION_DEFAULTS } from '../common/constants';
+import { AUCTION_DEFAULTS, TRAFFIC_LIGHT } from '../common/constants';
 import type { CreateAuctionDto } from './dto/create-auction.dto';
 import type { CreateLotDto } from './dto/create-lot.dto';
 
@@ -33,6 +33,14 @@ export interface AuctionRow {
   brand_name: string | null;
   model_number: string | null;
   key_specs: string | null;
+  paused_at: string | null;
+  paused_by: string | null;
+  pause_reason: string | null;
+  resumed_at: string | null;
+  resumed_by: string | null;
+  traffic_light_enabled: boolean;
+  traffic_light_green_pct: number;
+  traffic_light_yellow_pct: number;
   created_at: string;
   updated_at: string;
 }
@@ -85,6 +93,9 @@ export class AuctionsRepository {
         brand_name: dto.brandName ?? null,
         model_number: dto.modelNumber ?? null,
         key_specs: dto.keySpecs ?? null,
+        traffic_light_enabled:    dto.trafficLightEnabled    ?? false,
+        traffic_light_green_pct:  dto.trafficLightGreenPct   ?? TRAFFIC_LIGHT.DEFAULT_GREEN_PCT,
+        traffic_light_yellow_pct: dto.trafficLightYellowPct  ?? TRAFFIC_LIGHT.DEFAULT_YELLOW_PCT,
       })
       .select()
       .single();
@@ -124,7 +135,10 @@ export class AuctionsRepository {
   async updateStatus(
     id: string,
     status: AuctionStatus,
-    extra: Partial<Pick<AuctionRow, 'cancellation_reason' | 'end_time' | 'winning_vendor_id'>> = {},
+    extra: Partial<Pick<AuctionRow,
+      'cancellation_reason' | 'end_time' | 'winning_vendor_id' |
+      'paused_at' | 'paused_by' | 'pause_reason' | 'resumed_at' | 'resumed_by'
+    >> = {},
   ): Promise<AuctionRow> {
     const { data, error } = await this.db
       .getClient()
@@ -146,7 +160,8 @@ export class AuctionsRepository {
       'title' | 'description' | 'category' | 'start_time' | 'end_time' |
       'quantity' | 'unit' | 'ceiling_price' | 'reserve_price' | 'min_decrement' |
       'auto_extend_enabled' | 'auto_extend_minutes' | 'auto_extend_trigger' | 'visibility' |
-      'brand_name' | 'model_number' | 'key_specs'
+      'brand_name' | 'model_number' | 'key_specs' |
+      'traffic_light_enabled' | 'traffic_light_green_pct' | 'traffic_light_yellow_pct'
     >>,
   ): Promise<AuctionRow> {
     const { data, error } = await this.db

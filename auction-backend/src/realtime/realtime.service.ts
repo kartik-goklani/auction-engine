@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Server } from 'socket.io';
-import { AuctionVisibility, AuctionType } from '../common/types';
+import { AuctionVisibility, AuctionType, TrafficLightStatus } from '../common/types';
 
 export interface BidAcceptedPayload {
   currentBestAmount?: number;
@@ -11,6 +11,7 @@ export interface BidAcceptedPayload {
 export interface RankPayload {
   rank: number;
   totalActiveBidders: number;
+  traffic_light?: TrafficLightStatus;
 }
 
 export interface OutbidPayload {
@@ -22,6 +23,7 @@ export interface BidConfirmedPayload {
   bidId: string;
   amount: number;
   status: string;
+  traffic_light?: TrafficLightStatus;
 }
 
 export interface AuctionExtendedPayload {
@@ -118,11 +120,31 @@ export class RealtimeService {
     visibility: AuctionVisibility,
     rank: number,
     totalActiveBidders: number,
+    trafficLight?: TrafficLightStatus,
   ): void {
     if (auctionType === AuctionType.SEALED_BID) return;
     if (visibility === AuctionVisibility.BLIND) return;
 
-    const payload: RankPayload = { rank, totalActiveBidders };
+    const payload: RankPayload = {
+      rank,
+      totalActiveBidders,
+      ...(trafficLight !== undefined && { traffic_light: trafficLight }),
+    };
     this.emitToUser(userId, 'your_rank', payload);
+  }
+
+  emitAuctionPaused(auctionId: string, reason?: string): void {
+    this.emitToAuction(auctionId, 'auction_paused', {
+      auctionId,
+      reason,
+      pausedAt: new Date().toISOString(),
+    });
+  }
+
+  emitAuctionResumed(auctionId: string): void {
+    this.emitToAuction(auctionId, 'auction_resumed', {
+      auctionId,
+      resumedAt: new Date().toISOString(),
+    });
   }
 }

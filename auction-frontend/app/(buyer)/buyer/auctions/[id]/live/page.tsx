@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   connectSocket, joinAuction, leaveAuction,
   onBidAccepted, onAuctionExtended, onAuctionClosed, onAlertRaised, onAgentRunCompleted,
+  onAuctionPaused, onAuctionResumed,
 } from '@/lib/socket';
 import { auctionsApi, bidsApi, agentsApi } from '@/lib/api';
 import type { AuctionRow, BidRow as BidRowData } from '@/lib/types';
@@ -14,11 +15,13 @@ import { AuctionTimer } from '@/components/auction/AuctionTimer';
 import { BidTrendChart } from '@/components/auction/BidTrendChart';
 import { LiveBidFeed } from '@/components/auction/LiveBidFeed';
 import { AgentTraceViewer } from '@/components/agent/AgentTraceViewer';
+import { PauseAuctionModal } from '@/components/auction/PauseAuctionModal';
+import { AuctionPausedBanner } from '@/components/auction/AuctionPausedBanner';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { formatCurrency } from '@/lib/utils';
-import { ArrowLeft, Clock, X } from 'lucide-react';
+import { ArrowLeft, Clock, X, Pause, Play } from 'lucide-react';
 import Link from 'next/link';
 
 const BUYER_PLACEHOLDER = 'buyer-monitor';
@@ -27,12 +30,15 @@ export default function BuyerLivePage() {
   const router     = useRouter();
   const { id }     = useParams<{ id: string }>();
 
-  const [auction,   setAuction]   = useState<AuctionRow | null>(null);
-  const [bids,      setBids]      = useState<BidRowData[]>([]);
-  const [agentRuns, setAgentRuns] = useState<Awaited<ReturnType<typeof agentsApi.runs>>>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [extending, setExtending] = useState(false);
-  const [closing,   setClosing]   = useState(false);
+  const [auction,        setAuction]        = useState<AuctionRow | null>(null);
+  const [bids,           setBids]           = useState<BidRowData[]>([]);
+  const [agentRuns,      setAgentRuns]      = useState<Awaited<ReturnType<typeof agentsApi.runs>>>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [extending,      setExtending]      = useState(false);
+  const [closing,        setClosing]        = useState(false);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pausing,        setPausing]        = useState(false);
+  const [resuming,       setResuming]       = useState(false);
 
   const load = useCallback(async () => {
     const [a, b, runs] = await Promise.all([
@@ -41,10 +47,9 @@ export default function BuyerLivePage() {
       agentsApi.runs(id),
     ]);
 
-    // If the auction is no longer OPEN, redirect to results immediately.
-    // This handles the case where a buyer navigates directly to /live for
-    // a closed/awarded/cancelled auction via the URL bar.
-    if (a.status !== AuctionStatus.OPEN) {
+    // If the auction is no longer OPEN or PAUSED, redirect to results.
+    // PAUSED is allowed so the buyer stays on the live page while paused.
+    if (a.status !== AuctionStatus.OPEN && a.status !== AuctionStatus.PAUSED) {
       router.replace(`/buyer/auctions/${id}/results`);
       return;
     }
@@ -99,12 +104,22 @@ export default function BuyerLivePage() {
         });
       });
 
+      const offPaused = onAuctionPaused(() => {
+        setAuction((prev) => prev ? { ...prev, status: AuctionStatus.PAUSED } : prev);
+      });
+
+      const offResumed = onAuctionResumed(() => {
+        setAuction((prev) => prev ? { ...prev, status: AuctionStatus.OPEN } : prev);
+      });
+
       cleanup = () => {
         offBidAccepted();
         offExtended();
         offClosed();
         offAlert();
         offAgentRun();
+        offPaused();
+        offResumed();
         leaveAuction(id);
       };
     });
@@ -132,8 +147,30 @@ export default function BuyerLivePage() {
     }
   }
 
+  async function handlePause(reason?: string) {
+    setPausing(true);
+    try {
+      const updated = await auctionsApi.pauseAuction(id, reason);
+      setAuction(updated);
+    } finally {
+      setPausing(false);
+      setPauseModalOpen(false);
+    }
+  }
+
+  async function handleResume() {
+    setResuming(true);
+    try {
+      const updated = await auctionsApi.resumeAuction(id);
+      setAuction(updated);
+    } finally {
+      setResuming(false);
+    }
+  }
+
   if (loading || !auction) return <FullPageSpinner />;
 
+  const isPaused = auction.status === AuctionStatus.PAUSED;
   const acceptedBids = bids.filter((bid) => bid.status === 'ACCEPTED');
   const sortedAcceptedBids = [...acceptedBids].sort((left, right) => {
     if (auction.type === 'FORWARD') {
@@ -163,16 +200,44 @@ export default function BuyerLivePage() {
         </div>
         {/* Controls */}
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="secondary" size="sm" loading={extending} onClick={handleExtend}>
-            <Clock size={13} />
-            +5 min
-          </Button>
+          {!isPaused ? (
+            <>
+              <Button variant="secondary" size="sm" loading={extending} onClick={handleExtend}>
+                <Clock size={13} />
+                +5 min
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={pausing}
+                onClick={() => setPauseModalOpen(true)}
+                className="border-amber-300 text-amber-700 hover:bg-amber-50"
+              >
+                <Pause size={13} />
+                Pause
+              </Button>
+            </>
+          ) : (
+            <Button variant="secondary" size="sm" loading={resuming} onClick={handleResume} className="border-green-300 text-green-700 hover:bg-green-50">
+              <Play size={13} />
+              Resume
+            </Button>
+          )}
           <Button variant="danger" size="sm" loading={closing} onClick={handleForceClose}>
             <X size={13} />
             Force Close
           </Button>
         </div>
       </div>
+
+      {/* Paused banner — shown between controls and metrics */}
+      {isPaused && (
+        <AuctionPausedBanner
+          reason={auction.pause_reason}
+          onResume={handleResume}
+          resuming={resuming}
+        />
+      )}
 
       <div className="grid grid-cols-3 gap-4">
         <Card className="flex flex-col gap-2">
@@ -218,6 +283,12 @@ export default function BuyerLivePage() {
           <AgentTraceViewer runs={agentRuns} />
         </Card>
       )}
+
+      <PauseAuctionModal
+        isOpen={pauseModalOpen}
+        onClose={() => setPauseModalOpen(false)}
+        onConfirm={handlePause}
+      />
     </div>
   );
 }

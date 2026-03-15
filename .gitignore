@@ -1,6 +1,9 @@
 # ── Root ────────────────────────────────────────────────
 .DS_Store
 database
+node_modules
+supabase
+package*
 
 # ── Tests (tests/) ──────────────────────────────────────
 tests/.env.test

@@ -196,6 +196,23 @@ export const PRICE_INTELLIGENCE = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Traffic light bidding signal
+// ---------------------------------------------------------------------------
+
+export const TRAFFIC_LIGHT = {
+  /**
+   * Percentage gap within which a vendor's bid is GREEN (competitive).
+   * e.g. for a REVERSE auction, GREEN means the vendor is within 5% of the current best.
+   */
+  DEFAULT_GREEN_PCT: 5.00,
+  /**
+   * Percentage gap within which a vendor's bid is YELLOW (marginal).
+   * Above this threshold = RED (not competitive).
+   */
+  DEFAULT_YELLOW_PCT: 15.00,
+} as const;
+
+// ---------------------------------------------------------------------------
 // HTTP / API
 // ---------------------------------------------------------------------------
 

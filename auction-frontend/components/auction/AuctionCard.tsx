@@ -15,6 +15,7 @@ const STATUS_BORDER: Record<AuctionStatus, string> = {
   [AuctionStatus.DRAFT]:     'border-l-border-default',
   [AuctionStatus.PUBLISHED]: 'border-l-warning',
   [AuctionStatus.OPEN]:      'border-l-success',
+  [AuctionStatus.PAUSED]:    'border-l-warning',
   [AuctionStatus.CLOSED]:    'border-l-text-muted',
   [AuctionStatus.AWARDED]:   'border-l-accent',
   [AuctionStatus.CANCELLED]: 'border-l-danger',
