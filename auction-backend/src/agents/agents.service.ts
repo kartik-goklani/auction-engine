@@ -178,6 +178,7 @@ export class AgentsService {
         durationMs,
         status,
       });
+      this.realtimeService.emitAgentRunCompleted(auctionId, AgentType.VENDOR_SHORTLIST, agentRunId);
 
       if (status === AgentRunStatus.FAILED) {
         this.logger.warn(`Vendor Shortlist agent failed auctionId=${auctionId} runId=${agentRunId} error=${result.error}`, this.CONTEXT);
@@ -338,6 +339,7 @@ export class AgentsService {
         durationMs,
         status,
       });
+      this.realtimeService.emitAgentRunCompleted(auctionId, AgentType.ANOMALY_DETECTION, agentRunId);
 
       if (status === AgentRunStatus.FAILED) {
         this.logger.warn(`Anomaly Detection agent failed auctionId=${auctionId} runId=${agentRunId} error=${result.error}`, this.CONTEXT);
@@ -416,6 +418,27 @@ export class AgentsService {
         durationMs,
         status,
       });
+      this.realtimeService.emitAgentRunCompleted(auctionId, AgentType.AWARD_RECOMMENDATION, agentRunId);
+
+      // Notify the buyer that their award recommendation is ready
+      const { data: auctionRow } = await this.db
+        .getClient()
+        .from('auctions')
+        .select('buyer_id, title')
+        .eq('id', auctionId)
+        .single();
+      const buyerId = (auctionRow as { buyer_id: string; title: string } | null)?.buyer_id ?? null;
+      const auctionTitle = (auctionRow as { buyer_id: string; title: string } | null)?.title ?? 'Auction';
+      if (buyerId) {
+        // intentional fire-and-forget: notification must not block agent run completion
+        void this.notificationsService.send(
+          buyerId,
+          NotificationType.AWARD_ISSUED,
+          `Award recommendation ready — ${auctionTitle}`,
+          'The AI agent has analysed all bids and vendors. Your recommendation is ready to review.',
+          { auctionId, agentRunId },
+        );
+      }
 
       if (status === AgentRunStatus.FAILED) {
         this.logger.warn(`Award Recommendation agent failed auctionId=${auctionId} runId=${agentRunId} error=${result.error}`, this.CONTEXT);
@@ -526,6 +549,9 @@ export class AgentsService {
           durationMs,
           status,
         });
+        if (input.auctionId) {
+          this.realtimeService.emitAgentRunCompleted(input.auctionId, AgentType.PRICE_INTELLIGENCE, agentRunId);
+        }
       }
 
       if (input.persistMetadata && input.auctionId && agentRunId && result.output) {

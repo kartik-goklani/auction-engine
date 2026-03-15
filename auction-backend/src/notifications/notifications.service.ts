@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { NotificationsRepository, type NotificationRow } from './notifications.repository';
 import { RealtimeService } from '../realtime/realtime.service';
 import type { NotificationType } from '../common/types';
@@ -9,6 +9,7 @@ const DEDUPE_WINDOW_MS = 10_000;
 export class NotificationsService {
   constructor(
     private readonly notificationsRepository: NotificationsRepository,
+    @Inject(forwardRef(() => RealtimeService))
     private readonly realtimeService: RealtimeService,
   ) {}
 

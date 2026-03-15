@@ -8,6 +8,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Server, Socket } from 'socket.io';
@@ -28,6 +29,7 @@ export class RealtimeGateway
 
   constructor(
     private readonly realtimeService: RealtimeService,
+    @Inject(forwardRef(() => VendorsService))
     private readonly vendorsService: VendorsService,
     private readonly config: ConfigService,
   ) {
@@ -66,14 +68,18 @@ export class RealtimeGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { auctionId: string; vendorId: string },
   ): Promise<void> {
-    const isEligible = await this.vendorsService.verifyInvitationAccepted(
-      payload.auctionId,
-      payload.vendorId,
-    );
+    // Buyers own the auction and are allowed unconditionally.
+    // Only vendors need invitation status verification.
+    if (client.data.role !== 'buyer') {
+      const isEligible = await this.vendorsService.verifyInvitationAccepted(
+        payload.auctionId,
+        payload.vendorId,
+      );
 
-    if (!isEligible) {
-      client.emit('bid_rejected', { reason: 'VENDOR_NOT_ELIGIBLE' });
-      return;
+      if (!isEligible) {
+        client.emit('bid_rejected', { reason: 'VENDOR_NOT_ELIGIBLE' });
+        return;
+      }
     }
 
     void client.join(`auction:${payload.auctionId}`);

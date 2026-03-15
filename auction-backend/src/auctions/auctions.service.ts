@@ -190,6 +190,14 @@ export class AuctionsService {
   async close(id: string, buyerId: string): Promise<AuctionRow> {
     const auction = await this.transition(id, buyerId, AuctionStatus.CLOSED, 'AUCTION_CLOSED');
 
+    this.notificationsService.send(
+      auction.buyer_id,
+      NotificationType.AUCTION_CLOSED,
+      `Auction "${auction.title}" has closed`,
+      'The auction has ended. Review the results and issue the award.',
+      { auctionId: auction.id },
+    );
+
     // Non-blocking: award recommendation runs in the background
     this.agentsService.runAwardRecommendation(auction.id);
 
@@ -436,6 +444,14 @@ export class AuctionsService {
           actorType: ActorType.SYSTEM,
           action: 'AUCTION_AUTO_CLOSED',
         });
+
+        this.notificationsService.send(
+          auction.buyer_id,
+          NotificationType.AUCTION_CLOSED,
+          `Auction "${auction.title}" has closed`,
+          'The auction has ended automatically. Review the results and issue the award.',
+          { auctionId: auction.id },
+        );
 
         // Non-blocking: award recommendation
         this.agentsService.runAwardRecommendation(auction.id);

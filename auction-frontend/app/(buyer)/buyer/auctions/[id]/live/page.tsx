@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   connectSocket, joinAuction, leaveAuction,
-  onBidAccepted, onAuctionExtended, onAuctionClosed, onAlertRaised,
+  onBidAccepted, onAuctionExtended, onAuctionClosed, onAlertRaised, onAgentRunCompleted,
 } from '@/lib/socket';
 import { auctionsApi, bidsApi, agentsApi } from '@/lib/api';
 import type { AuctionRow, BidRow as BidRowData } from '@/lib/types';
@@ -91,11 +91,20 @@ export default function BuyerLivePage() {
         void agentsApi.alerts(id).then(() => undefined);
       });
 
+      // Refresh agent trace list whenever any agent run completes.
+      const offAgentRun = onAgentRunCompleted(() => {
+        void agentsApi.runs(id).then((newRuns) => {
+          if (cancelled) return;
+          setAgentRuns(newRuns);
+        });
+      });
+
       cleanup = () => {
         offBidAccepted();
         offExtended();
         offClosed();
         offAlert();
+        offAgentRun();
         leaveAuction(id);
       };
     });

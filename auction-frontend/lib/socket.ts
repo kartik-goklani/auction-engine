@@ -133,3 +133,15 @@ export function onNotification(
   getSocket().on('notification', handler);
   return () => getSocket().off('notification', handler);
 }
+
+export interface AgentRunCompletedPayload {
+  agentType: string;
+  agentRunId: string;
+}
+
+export function onAgentRunCompleted(
+  handler: (payload: AgentRunCompletedPayload) => void,
+): () => void {
+  getSocket().on('agent_run_completed', handler);
+  return () => getSocket().off('agent_run_completed', handler);
+}

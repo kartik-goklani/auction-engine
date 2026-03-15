@@ -103,6 +103,11 @@ export class RealtimeService {
     this.emitToAuction(auctionId, 'bid_accepted', payload);
   }
 
+  /** Notify the auction room that a new agent run has completed. */
+  emitAgentRunCompleted(auctionId: string, agentType: string, agentRunId: string): void {
+    this.emitToAuction(auctionId, 'agent_run_completed', { agentType, agentRunId });
+  }
+
   /**
    * Send rank to a vendor — only when visibility allows it.
    * Sealed bid never reveals rank during bidding.

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import type { AgentRunRow } from '@/lib/types';
 import { AgentRunStatus, AgentType } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
-import { ChevronDown, ChevronRight, Terminal, Clock, Coins } from 'lucide-react';
+import { JsonViewer } from '@/components/ui/JsonViewer';
+import { ChevronDown, ChevronRight, Terminal, Clock, Coins, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ToolCall {
@@ -43,9 +44,9 @@ function ToolCallRow({ call }: { call: ToolCall }) {
           {(['input', 'output'] as const).map((key) => (
             <div key={key} className="px-3 py-2">
               <p className="mb-1.5 text-[10px] uppercase tracking-wider text-text-muted">{key}</p>
-              <pre className="overflow-x-auto text-[11px] leading-relaxed text-text-secondary font-mono whitespace-pre-wrap break-all">
-                {JSON.stringify(call[key], null, 2)}
-              </pre>
+              <div className="overflow-x-auto py-1">
+                <JsonViewer value={call[key]} />
+              </div>
             </div>
           ))}
         </div>
@@ -58,8 +59,17 @@ function AgentRunAccordion({ run }: { run: AgentRunRow }) {
   const [open, setOpen] = useState(false);
   const toolCalls = (run.tool_calls ?? []) as ToolCall[];
 
+  const isAnomalyWarning =
+    run.agent_type === AgentType.ANOMALY_DETECTION &&
+    (run.final_output as Record<string, unknown> | null)?.anomaly_detected === true;
+
   return (
-    <div className="rounded-[10px] border border-border-subtle overflow-hidden">
+    <div
+      className={cn(
+        'rounded-[10px] border overflow-hidden',
+        isAnomalyWarning ? 'border-warning/50 bg-warning/[0.03]' : 'border-border-subtle',
+      )}
+    >
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
@@ -67,6 +77,9 @@ function AgentRunAccordion({ run }: { run: AgentRunRow }) {
       >
         <div className="flex items-center gap-3">
           {open ? <ChevronDown size={14} className="text-text-muted shrink-0" /> : <ChevronRight size={14} className="text-text-muted shrink-0" />}
+          {isAnomalyWarning && (
+            <AlertTriangle size={13} className="text-warning shrink-0" />
+          )}
           <span className="text-sm font-medium text-text-primary">
             {AGENT_LABELS[run.agent_type] ?? run.agent_type}
           </span>
@@ -111,9 +124,9 @@ function AgentRunAccordion({ run }: { run: AgentRunRow }) {
           {run.final_output && (
             <div>
               <p className="mb-1.5 text-[10px] uppercase tracking-wider text-text-muted">Final Output</p>
-              <pre className="overflow-x-auto rounded-lg bg-bg-input px-3 py-2.5 text-[11px] font-mono text-text-secondary whitespace-pre-wrap break-all">
-                {JSON.stringify(run.final_output, null, 2)}
-              </pre>
+              <div className="rounded-lg bg-bg-input px-3 py-2.5 overflow-x-auto">
+                <JsonViewer value={run.final_output} />
+              </div>
             </div>
           )}
         </div>
