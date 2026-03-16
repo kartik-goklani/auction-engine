@@ -187,7 +187,31 @@ async function testVendorShortlist(auctionId: string, category: string): Promise
 async function testAnomalyDetection(auctionId: string, latestBidAmount: number): Promise<void> {
   header('Agent 3 — Anomaly Detection');
   console.log(`auctionId=${auctionId}  latestBid=${latestBidAmount} paise (₹${latestBidAmount / 100})`);
-  const result = await runAnomalyDetectionAgent(db, auctionId, 'smoke-test-run', latestBidAmount);
+  const agentRunId = 'smoke-test-run';
+  const result = await runAnomalyDetectionAgent(db, {
+    auctionId,
+    agentRunId,
+    triggeringBid: {
+      bidId:    'smoke-test-bid',
+      vendorId: 'smoke-test-vendor',
+      amount:   latestBidAmount,
+      placedAt: new Date().toISOString(),
+    },
+    flags: [
+      {
+        type:              'BELOW_RISK_THRESHOLD',
+        severity:          'HIGH',
+        vendorIdsInvolved: ['smoke-test-vendor'],
+        detail:            `Smoke test flag for bid of ₹${(latestBidAmount / 100).toFixed(2)}`,
+      },
+    ],
+    auctionContext: {
+      type:             'REVERSE',
+      currentBestPrice: latestBidAmount,
+      vendorCount:      3,
+      elapsedMinutes:   10,
+    },
+  });
   printResult(`output  (tokens=${result.tokensUsed}  tools=${result.toolCalls.length})`, result);
 }
 
