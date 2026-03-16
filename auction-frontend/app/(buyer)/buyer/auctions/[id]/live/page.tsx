@@ -5,10 +5,10 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   connectSocket, joinAuction, leaveAuction,
   onBidAccepted, onAuctionExtended, onAuctionClosed, onAlertRaised, onAgentRunCompleted,
-  onAuctionPaused, onAuctionResumed,
+  onAuctionPaused, onAuctionResumed, onParticipantsChanged, onAuctionCancelled, onReconnect,
 } from '@/lib/socket';
 import { auctionsApi, bidsApi, agentsApi } from '@/lib/api';
-import type { AuctionRow, BidRow as BidRowData } from '@/lib/types';
+import type { AuctionRow, BidRow as BidRowData, ReserveNotMetDetails } from '@/lib/types';
 import { AuctionStatus } from '@/lib/types';
 import { AuctionStatusBadge } from '@/components/auction/AuctionStatusBadge';
 import { AuctionTimer } from '@/components/auction/AuctionTimer';
@@ -16,6 +16,7 @@ import { BidTrendChart } from '@/components/auction/BidTrendChart';
 import { LiveBidFeed } from '@/components/auction/LiveBidFeed';
 import { AgentTraceViewer } from '@/components/agent/AgentTraceViewer';
 import { PauseAuctionModal } from '@/components/auction/PauseAuctionModal';
+import { ReserveNotMetModal } from '@/components/auction/ReserveNotMetModal';
 import { AuctionPausedBanner } from '@/components/auction/AuctionPausedBanner';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -33,12 +34,15 @@ export default function BuyerLivePage() {
   const [auction,        setAuction]        = useState<AuctionRow | null>(null);
   const [bids,           setBids]           = useState<BidRowData[]>([]);
   const [agentRuns,      setAgentRuns]      = useState<Awaited<ReturnType<typeof agentsApi.runs>>>([]);
+  const [vendorCount,    setVendorCount]    = useState(0);
   const [loading,        setLoading]        = useState(true);
   const [extending,      setExtending]      = useState(false);
   const [closing,        setClosing]        = useState(false);
-  const [pauseModalOpen, setPauseModalOpen] = useState(false);
-  const [pausing,        setPausing]        = useState(false);
-  const [resuming,       setResuming]       = useState(false);
+  const [pauseModalOpen,       setPauseModalOpen]       = useState(false);
+  const [pausing,              setPausing]              = useState(false);
+  const [resuming,             setResuming]             = useState(false);
+  const [reserveModalOpen,     setReserveModalOpen]     = useState(false);
+  const [reserveNotMetDetails, setReserveNotMetDetails] = useState<ReserveNotMetDetails | null>(null);
 
   const load = useCallback(async () => {
     const [a, b, runs] = await Promise.all([
@@ -47,9 +51,14 @@ export default function BuyerLivePage() {
       agentsApi.runs(id),
     ]);
 
-    // If the auction is no longer OPEN or PAUSED, redirect to results.
+    // If the auction is no longer OPEN, PAUSED, or RESERVE_NOT_MET, redirect to results.
     // PAUSED is allowed so the buyer stays on the live page while paused.
-    if (a.status !== AuctionStatus.OPEN && a.status !== AuctionStatus.PAUSED) {
+    // RESERVE_NOT_MET is allowed so the reserve modal can be shown without navigating away.
+    if (
+      a.status !== AuctionStatus.OPEN &&
+      a.status !== AuctionStatus.PAUSED &&
+      a.status !== AuctionStatus.RESERVE_NOT_MET
+    ) {
       router.replace(`/buyer/auctions/${id}/results`);
       return;
     }
@@ -112,6 +121,17 @@ export default function BuyerLivePage() {
         setAuction((prev) => prev ? { ...prev, status: AuctionStatus.OPEN } : prev);
       });
 
+      const offParticipants = onParticipantsChanged((p) => setVendorCount(p.vendorCount));
+
+      const offCancelled = onAuctionCancelled(() => {
+        router.push(`/buyer/auctions/${id}/results`);
+      });
+
+      const offReconnect = onReconnect(() => {
+        joinAuction(id, BUYER_PLACEHOLDER);
+        void load();
+      });
+
       cleanup = () => {
         offBidAccepted();
         offExtended();
@@ -120,6 +140,9 @@ export default function BuyerLivePage() {
         offAgentRun();
         offPaused();
         offResumed();
+        offParticipants();
+        offCancelled();
+        offReconnect();
         leaveAuction(id);
       };
     });
@@ -136,15 +159,33 @@ export default function BuyerLivePage() {
     finally { setExtending(false); }
   }
 
-  async function handleForceClose() {
-    if (!confirm('Force close this auction now?')) return;
+  async function handleCloseNow() {
+    if (!confirm('Close this auction now?')) return;
     setClosing(true);
     try {
-      await auctionsApi.close(id);
-      router.push(`/buyer/auctions/${id}/results`);
+      const result = await auctionsApi.close(id);
+      if (result.status === AuctionStatus.RESERVE_NOT_MET && result.reserveNotMetDetails) {
+        setReserveNotMetDetails(result.reserveNotMetDetails);
+        setReserveModalOpen(true);
+      } else {
+        router.push(`/buyer/auctions/${id}/results`);
+      }
     } finally {
       setClosing(false);
     }
+  }
+
+  async function handleForceClose() {
+    await auctionsApi.forceClose(id);
+    setReserveModalOpen(false);
+    router.push(`/buyer/auctions/${id}/results`);
+  }
+
+  async function handleExtendFromReserve() {
+    setReserveModalOpen(false);
+    setExtending(true);
+    try { await auctionsApi.extendByMinutes(id, 5); await load(); }
+    finally { setExtending(false); }
   }
 
   async function handlePause(reason?: string) {
@@ -223,9 +264,9 @@ export default function BuyerLivePage() {
               Resume
             </Button>
           )}
-          <Button variant="danger" size="sm" loading={closing} onClick={handleForceClose}>
+          <Button variant="danger" size="sm" loading={closing} onClick={handleCloseNow}>
             <X size={13} />
-            Force Close
+            Close Now
           </Button>
         </div>
       </div>
@@ -239,7 +280,7 @@ export default function BuyerLivePage() {
         />
       )}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="flex flex-col gap-2">
           <p className="text-[10px] uppercase tracking-wider text-text-muted">Current Best</p>
           <p className="font-mono text-3xl font-bold text-success leading-none">
@@ -256,6 +297,10 @@ export default function BuyerLivePage() {
           <p className="text-[10px] uppercase tracking-wider text-text-muted">Total Bids</p>
           <p className="font-mono text-2xl font-bold text-text-primary">{bids.length}</p>
         </Card>
+        <Card className="flex flex-col gap-2">
+          <p className="text-[10px] uppercase tracking-wider text-text-muted">Vendors Connected</p>
+          <p className="font-mono text-2xl font-bold text-text-primary">{vendorCount}</p>
+        </Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -264,7 +309,18 @@ export default function BuyerLivePage() {
             <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
             <h2 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Price Trend</h2>
           </div>
-          <BidTrendChart bids={bids} auctionType={auction.type} />
+          <BidTrendChart
+            bids={bids}
+            auctionType={auction.type}
+            ceilingPrice={auction.ceiling_price}
+            isLive={true}
+            trafficLightConfig={{
+              enabled:   auction.traffic_light_enabled,
+              greenPct:  auction.traffic_light_green_pct,
+              yellowPct: auction.traffic_light_yellow_pct,
+            }}
+            anomalyAlerts={[]}
+          />
         </Card>
 
         <Card className="flex flex-col gap-3">
@@ -289,6 +345,19 @@ export default function BuyerLivePage() {
         onClose={() => setPauseModalOpen(false)}
         onConfirm={handlePause}
       />
+
+      {reserveNotMetDetails && (
+        <ReserveNotMetModal
+          open={reserveModalOpen}
+          bestBid={reserveNotMetDetails.best_bid}
+          reservePrice={reserveNotMetDetails.reserve_price}
+          gapAmount={reserveNotMetDetails.gap_amount}
+          gapPct={reserveNotMetDetails.gap_pct}
+          onForceClose={handleForceClose}
+          onExtend={handleExtendFromReserve}
+          onOpenChange={setReserveModalOpen}
+        />
+      )}
     </div>
   );
 }
