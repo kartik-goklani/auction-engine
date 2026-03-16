@@ -1,174 +1,182 @@
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { ANOMALY, AGENT_QUERY } from '../../common/constants';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { getCanonicalRiskThresholdContext, isMinorUnitAmount } from './anomaly-detection.helpers';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export function createAnomalyDetectionTools(db: SupabaseClient): DynamicStructuredTool[] {
-  const getRecentBidsForAuction = new DynamicStructuredTool({
-    name: 'get_recent_bids_for_auction',
-    description: 'Returns the last N accepted bids for an auction with timing information.',
+/**
+ * Creates the 4 Tier 2 anomaly detection tools.
+ *
+ * auctionId and agentRunId are captured as closure context so the LLM
+ * cannot corrupt them via tool arguments.
+ */
+export function createAnomalyDetectionTools(
+  db: SupabaseClient,
+  auctionId: string,
+  agentRunId: string,
+): DynamicStructuredTool[] {
+
+  // ── TOOL 1: get_vendor_bid_history ────────────────────────────────────────
+
+  const getVendorBidHistory = new DynamicStructuredTool({
+    name: 'get_vendor_bid_history',
+    description:
+      'Get the complete bid timeline for a specific vendor in this auction. Returns all accepted bids with inter-bid intervals. Use this to investigate SCRIPTED_BIDDING or EXTREME_DROP flags.',
     schema: z.object({
-      auctionId: z.string(),
-      limit: z.number().int().min(1).max(AGENT_QUERY.MAX_LIMIT).default(AGENT_QUERY.DEFAULT_LIMIT),
+      vendorId: z.string().describe('The vendor ID to look up'),
     }),
-    func: async ({ auctionId, limit }) => {
+    func: async ({ vendorId }) => {
       const { data } = await db
         .from('bids')
-        .select('id, vendor_id, amount, submitted_at')
+        .select('id, amount, submitted_at')
         .eq('auction_id', auctionId)
+        .eq('vendor_id', vendorId)
         .eq('status', 'ACCEPTED')
-        .order('submitted_at', { ascending: false })
-        .limit(limit);
+        .order('submitted_at', { ascending: true });
 
-      type Bid = { vendor_id: string; amount: number; submitted_at: string };
-      const bids = (data ?? []) as Bid[];
+      type BidRow = { id: string; amount: number; submitted_at: string };
+      const bids = (data ?? []) as BidRow[];
 
-      // Annotate with gap_ms between consecutive bids
       const annotated = bids.map((bid, i) => ({
-        ...bid,
-        gap_ms:
-          i < bids.length - 1
-            ? new Date(bids[i].submitted_at).getTime() -
-              new Date(bids[i + 1].submitted_at).getTime()
-            : null,
+        bidId:       bid.id,
+        amount:      bid.amount,
+        amountRupees: (bid.amount / 100).toFixed(2),
+        submittedAt: bid.submitted_at,
+        gap_ms:      i > 0
+          ? new Date(bid.submitted_at).getTime() - new Date(bids[i - 1].submitted_at).getTime()
+          : null,
       }));
 
-      return JSON.stringify({ bids: annotated });
+      return JSON.stringify({ vendorId, bids: annotated });
     },
   });
 
-  const analyseBidTimingPattern = new DynamicStructuredTool({
-    name: 'analyse_bid_timing_pattern',
+  // ── TOOL 2: get_vendor_flag_history ──────────────────────────────────────
+
+  const getVendorFlagHistory = new DynamicStructuredTool({
+    name: 'get_vendor_flag_history',
     description:
-      'Analyses bid timing patterns to detect rapid alternating pairs (collusion signal) or suspiciously low bids.',
+      'Get all past anomaly alerts raised for a specific vendor across all auctions. Use this to determine if this vendor has a prior pattern of suspicious behaviour.',
     schema: z.object({
-      bids: z
-        .array(
-          z.object({
-            vendor_id: z.string(),
-            amount: z.number(),
-            submitted_at: z.string(),
-            gap_ms: z.number().nullable(),
-          }),
-        )
-        .describe('Bid array from get_recent_bids_for_auction'),
-      riskThresholdPaise: z.number().int().nullable().describe('Risk threshold from Agent 1 output'),
+      vendorId: z.string().describe('The vendor ID to look up'),
     }),
-    func: async ({ bids, riskThresholdPaise }) => {
-      const hasValidRiskThreshold = riskThresholdPaise == null || isMinorUnitAmount(riskThresholdPaise);
-      if (!hasValidRiskThreshold) {
-        return JSON.stringify({
-          anomaly_detected: false,
-          reason: 'Risk threshold is not a valid paise integer',
-        });
-      }
+    func: async ({ vendorId }) => {
+      const { data } = await db
+        .from('auction_alerts')
+        .select('alert_type, severity, auction_id, created_at')
+        .contains('vendor_ids_involved', [vendorId])
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-      if (bids.length < ANOMALY.COLLUSION_MIN_BIDS) {
-        return JSON.stringify({
-          anomaly_detected: false,
-          reason: 'Insufficient bids to detect pattern',
-        });
-      }
-
-      // Detect rapid alternating pairs — classic collusion signal
-      // Two vendors alternating bids within 3 seconds of each other
-      const RAPID_MS = ANOMALY.COLLUSION_RAPID_WINDOW_MS;
-      let collusionPairsFound = 0;
-      const suspectedVendors: string[] = [];
-
-      for (let i = 0; i < bids.length - 3; i++) {
-        const a = bids[i];
-        const b = bids[i + 1];
-        const c = bids[i + 2];
-        const d = bids[i + 3];
-
-        if (
-          a.vendor_id !== b.vendor_id &&
-          a.vendor_id === c.vendor_id &&
-          b.vendor_id === d.vendor_id &&
-          (a.gap_ms ?? Infinity) < RAPID_MS &&
-          (b.gap_ms ?? Infinity) < RAPID_MS
-        ) {
-          collusionPairsFound++;
-          suspectedVendors.push(a.vendor_id, b.vendor_id);
-        }
-      }
-
-      // Detect below-risk bids
-      const belowRiskBids = riskThresholdPaise == null
-        ? []
-        : bids.filter((b) => b.amount < riskThresholdPaise);
-
-      const collusionDetected = collusionPairsFound >= ANOMALY.COLLUSION_MIN_PAIRS;
-      const belowRiskDetected = belowRiskBids.length > 0;
-
-      if (!collusionDetected && !belowRiskDetected) {
-        return JSON.stringify({ anomaly_detected: false });
-      }
+      type AlertRow = {
+        alert_type: string;
+        severity: string;
+        auction_id: string;
+        created_at: string;
+      };
+      const alerts = (data ?? []) as AlertRow[];
 
       return JSON.stringify({
-        anomaly_detected: true,
-        collusion_detected: collusionDetected,
-        below_risk_detected: belowRiskDetected,
-        suspected_vendor_ids: [...new Set(suspectedVendors)],
-        below_risk_vendor_ids: belowRiskBids.map((b) => b.vendor_id),
-        pattern_occurrences: collusionPairsFound,
+        vendorId,
+        totalAlerts: alerts.length,
+        alerts: alerts.map((a) => ({
+          alertType:  a.alert_type,
+          severity:   a.severity,
+          auctionId:  a.auction_id,
+          createdAt:  a.created_at,
+        })),
       });
     },
   });
 
-  const getRiskThresholdForAuction = new DynamicStructuredTool({
-    name: 'get_risk_threshold_for_auction',
-    description: 'Fetches the risk threshold set by the Price Intelligence agent for this auction.',
+  // ── TOOL 3: get_vendor_pair_co_auctions ──────────────────────────────────
+
+  const getVendorPairCoAuctions = new DynamicStructuredTool({
+    name: 'get_vendor_pair_co_auctions',
+    description:
+      'Get the number of auctions where two specific vendors both participated, and whether they have been flagged together before. Use this only when investigating COORDINATED_TIMING flags involving two specific vendors.',
     schema: z.object({
-      auctionId: z.string(),
+      vendorId1: z.string().describe('First vendor ID'),
+      vendorId2: z.string().describe('Second vendor ID'),
     }),
-    func: async ({ auctionId }) => {
-      const context = await getCanonicalRiskThresholdContext(db, auctionId);
+    func: async ({ vendorId1, vendorId2 }) => {
+      // Count auctions where both vendors had ACCEPTED invitations
+      const { count: coAuctionCount } = await db
+        .from('vendor_invitations')
+        .select('auction_id', { count: 'exact', head: true })
+        .eq('vendor_id', vendorId1)
+        .eq('status', 'ACCEPTED')
+        .in(
+          'auction_id',
+          // Subquery via a separate fetch
+          await db
+            .from('vendor_invitations')
+            .select('auction_id')
+            .eq('vendor_id', vendorId2)
+            .eq('status', 'ACCEPTED')
+            .then(({ data }) => (data ?? []).map((r: { auction_id: string }) => r.auction_id)),
+        );
+
+      // Count alerts where both vendor IDs appear in vendor_ids_involved
+      const { count: sharedFlagCount } = await db
+        .from('auction_alerts')
+        .select('id', { count: 'exact', head: true })
+        .contains('vendor_ids_involved', [vendorId1, vendorId2]);
+
       return JSON.stringify({
-        auction_type: context.auctionType,
-        risk_threshold: context.riskThreshold,
-        risk_note: context.riskNote,
-        confidence_level: context.confidenceLevel,
-        metadata_agent_run_id: context.metadataAgentRunId,
-        metadata_created_at: context.metadataCreatedAt,
-        message: context.reason,
+        vendorId1,
+        vendorId2,
+        coAuctionCount: coAuctionCount ?? 0,
+        sharedFlagCount: sharedFlagCount ?? 0,
       });
     },
   });
 
-  const createAnomalyAlert = new DynamicStructuredTool({
-    name: 'create_anomaly_alert',
-    description: 'Creates an anomaly alert in the database when a signal is detected.',
+  // ── TOOL 4: raise_alert ──────────────────────────────────────────────────
+
+  const raiseAlert = new DynamicStructuredTool({
+    name: 'raise_alert',
+    description:
+      'Raise a verified anomaly alert. Call this ONLY when you have investigated the flags and are confident this is a genuine alert worth showing the buyer. Do NOT call this for false positives or ambiguous patterns. You may call this once per distinct anomaly type if multiple types are confirmed.',
     schema: z.object({
-      auctionId: z.string(),
-      agentRunId: z.string(),
-      alertType: z.enum(['COLLUSION_SIGNAL', 'BELOW_RISK_BID']),
-      severity: z.enum(['LOW', 'MEDIUM', 'HIGH']),
-      description: z.string(),
-      vendorIdsInvolved: z.array(z.string()).default([]),
+      alertType: z
+        .string()
+        .describe('Must match one of the alert_type enum values: EXTREME_DROP, SCRIPTED_BIDDING, IDENTICAL_AMOUNTS, COORDINATED_TIMING, BELOW_RISK_THRESHOLD, COLLUSION_SIGNAL, BELOW_RISK_BID'),
+      severity: z
+        .enum(['LOW', 'MEDIUM', 'HIGH'])
+        .describe('Severity level of the alert'),
+      description: z
+        .string()
+        .describe('Max 2 sentences written for a procurement buyer. Use ₹ rupee amounts, not paise.'),
+      vendorIdsInvolved: z
+        .array(z.string())
+        .default([])
+        .describe('IDs of vendors involved in this anomaly'),
     }),
-    func: async ({ auctionId, agentRunId, alertType, severity, description, vendorIdsInvolved }) => {
+    func: async ({ alertType, severity, description, vendorIdsInvolved }) => {
       const { data, error } = await db
         .from('auction_alerts')
         .insert({
-          auction_id: auctionId,
-          agent_run_id: agentRunId,
-          alert_type: alertType,
+          auction_id:          auctionId,
+          agent_run_id:        agentRunId,
+          alert_type:          alertType,
           severity,
           description,
           vendor_ids_involved: vendorIdsInvolved,
         })
-        .select()
+        .select('id, alert_type, severity')
         .single();
 
       if (error) {
         return JSON.stringify({ success: false, error: error.message });
       }
-      return JSON.stringify({ success: true, alert: data });
+
+      return JSON.stringify({
+        success:   true,
+        alertId:   (data as { id: string }).id,
+        alertType: (data as { alert_type: string }).alert_type,
+        severity:  (data as { severity: string }).severity,
+      });
     },
   });
 
-  return [getRecentBidsForAuction, analyseBidTimingPattern, getRiskThresholdForAuction, createAnomalyAlert];
+  return [getVendorBidHistory, getVendorFlagHistory, getVendorPairCoAuctions, raiseAlert];
 }

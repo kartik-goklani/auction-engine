@@ -9,7 +9,8 @@ import { AgentsService } from '../agents/agents.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
-import { AUCTION_DEFAULTS, BID } from '../common/constants';
+import { AnomalyWindowService } from '../agents/anomaly-detection/anomaly-window.service';
+import { AUCTION_DEFAULTS, ANOMALY, BID } from '../common/constants';
 import {
   BidStatus,
   ActorType,
@@ -30,6 +31,7 @@ export class BidsService {
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
     private readonly realtimeService: RealtimeService,
+    private readonly anomalyWindowService: AnomalyWindowService,
   ) {}
 
   async submitBid(
@@ -181,8 +183,23 @@ export class BidsService {
       }
     }
 
-    // Non-blocking: anomaly detection agent
-    this.agentsService.runAnomalyDetection(auctionId, bid.amount);
+    // Tier 1: synchronous in-memory push — must run before the fire-and-forget boundary.
+    // Risk threshold is read from AnomalyWindowService's internal cache (populated at auction OPEN).
+    const bidRecord = {
+      bidId:    bid.id,
+      vendorId: bid.vendor_id,
+      amount:   bid.amount,
+      placedAt: new Date(bid.submitted_at),
+    };
+    const anomalyFlags = this.anomalyWindowService.push(bidRecord, auctionId);
+
+    // Tier 2 gate: only fire the LLM agent when flags warrant investigation
+    const hasHighFlag      = anomalyFlags.some((f) => f.severity === 'HIGH');
+    const hasMultipleFlags = anomalyFlags.length >= ANOMALY.TIER2_MIN_FLAGS_FOR_MEDIUM;
+    if (hasHighFlag || hasMultipleFlags) {
+      // intentional fire-and-forget: anomaly detection must not block bid confirmation
+      this.agentsService.runAnomalyDetection(auctionId, bidRecord, anomalyFlags);
+    }
 
     // Fire-and-forget: notifications and audit
     this.notificationsService.send(

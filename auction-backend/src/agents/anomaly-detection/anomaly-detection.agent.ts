@@ -1,53 +1,145 @@
 import { ChatOpenAI } from '@langchain/openai';
+import { StateGraph, MessagesAnnotation, START, END } from '@langchain/langgraph';
+import { ToolNode } from '@langchain/langgraph/prebuilt';
+import type { AIMessage } from '@langchain/core/messages';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { runReactLoop } from '../react-runner';
-import { AI } from '../../common/constants';
+import { AI, ANOMALY } from '../../common/constants';
 import { createAnomalyDetectionTools } from './anomaly-detection.tools';
-import { AuctionType } from '../../common/types';
+import type { AnomalyFlag } from './anomaly-window.service';
+
+// ── Agent input ───────────────────────────────────────────────────────────────
+
+export interface AnomalyAgentInput {
+  auctionId:      string;
+  agentRunId:     string;
+  triggeringBid:  {
+    bidId:    string;
+    vendorId: string;
+    amount:   number;   // paise
+    placedAt: string;   // ISO string
+  };
+  flags:          AnomalyFlag[];   // from Tier 1, always non-empty
+  auctionContext: {
+    type:             string;   // REVERSE | FORWARD | SEALED_BID
+    currentBestPrice: number;   // paise
+    vendorCount:      number;
+    elapsedMinutes:   number;
+  };
+}
+
+// ── Agent result ──────────────────────────────────────────────────────────────
 
 export interface AnomalyDetectionResult {
   anomalyDetected: boolean;
-  toolCalls: Array<{ tool_name: string; input: unknown; output: unknown }>;
-  tokensUsed: number;
-  error?: string;
+  toolCalls:       Array<{ tool_name: string; input: unknown; output: unknown }>;
+  tokensUsed:      number;
+  error?:          string;
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function paise2rupees(paise: number): string {
+  return (paise / 100).toFixed(2);
+}
+
+function buildSystemPrompt(input: AnomalyAgentInput): string {
+  const { auctionId, triggeringBid, flags, auctionContext } = input;
+
+  return `You are an anomaly investigation agent for a procurement auction platform.
+Tier 1 deterministic checks have already flagged the following patterns in auction ${auctionId}. Your job is to INVESTIGATE these flags using the available tools and determine whether each flag represents a genuine alert that warrants notifying the buyer.
+
+Flags raised by Tier 1:
+${JSON.stringify(flags, null, 2)}
+
+Triggering bid (amounts in rupees):
+- Vendor: ${triggeringBid.vendorId}
+- Amount: ₹${paise2rupees(triggeringBid.amount)}
+- Time: ${triggeringBid.placedAt}
+
+Auction context:
+- Type: ${auctionContext.type}
+- Current best price: ₹${paise2rupees(auctionContext.currentBestPrice)}
+- Vendors participating: ${auctionContext.vendorCount}
+- Elapsed: ${auctionContext.elapsedMinutes} minutes
+
+Investigation guidelines:
+- For SCRIPTED_BIDDING or EXTREME_DROP: call get_vendor_bid_history for the flagged vendor, then check get_vendor_flag_history for prior patterns.
+- For COORDINATED_TIMING: call get_vendor_pair_co_auctions for the vendor pair, then get_vendor_flag_history for each vendor individually.
+- For IDENTICAL_AMOUNTS: call get_vendor_flag_history for each involved vendor.
+- For BELOW_RISK_THRESHOLD: call get_vendor_bid_history to check if this vendor corrected course immediately (fat-finger) or persisted.
+- Only call raise_alert when you are confident the flag is genuine. A first-time vendor with no flag history and a plausible explanation is likely a false positive.
+- You may call raise_alert multiple times if multiple distinct anomaly types are confirmed.
+- If you determine all flags are false positives, do not call raise_alert. The investigation is still valuable — it produced a clean result.
+- When writing alert descriptions, always express monetary amounts in rupees (₹) format. Never use paise values.`;
+}
+
+// ── Graph ─────────────────────────────────────────────────────────────────────
+
+function shouldContinue(state: typeof MessagesAnnotation.State): 'tools' | typeof END {
+  const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+  return lastMessage.tool_calls && lastMessage.tool_calls.length > 0 ? 'tools' : END;
+}
+
+// ── Main entry point ──────────────────────────────────────────────────────────
 
 export async function runAnomalyDetectionAgent(
   db: SupabaseClient,
-  auctionId: string,
-  agentRunId: string,
-  latestBidAmount: number,
+  input: AnomalyAgentInput,
 ): Promise<AnomalyDetectionResult> {
-  const tools = createAnomalyDetectionTools(db);
-  const model = new ChatOpenAI({ model: AI.MODEL, temperature: AI.TEMPERATURE });
+  const tools          = createAnomalyDetectionTools(db, input.auctionId, input.agentRunId);
+  const model          = new ChatOpenAI({ model: AI.MODEL, temperature: AI.TEMPERATURE });
+  const modelWithTools = model.bindTools(tools);
 
-  const bidAmountRupees = (latestBidAmount / 100).toFixed(2);
-  const prompt = `You are a procurement anomaly detection agent. A new bid of ₹${bidAmountRupees} was just accepted in auction ${auctionId} (agent run: ${agentRunId}).
+  const agentNode = async (state: typeof MessagesAnnotation.State) => {
+    const response = await modelWithTools.invoke(state.messages);
+    return { messages: [response] };
+  };
 
-Use your tools to:
-1. Fetch the risk threshold for this auction
-2. Get the last 20 accepted bids for this auction
-3. Analyse the bid timing pattern for collusion signals and below-risk bids
-4. If any anomaly is detected, call create_anomaly_alert for each distinct anomaly type
+  const toolNode = new ToolNode(tools);
 
-Below-risk detection applies only to ${AuctionType.REVERSE} auctions.
-If the fetched auction_type is not ${AuctionType.REVERSE} or the fetched risk threshold is null, skip the below-risk check and only evaluate timing-based collusion patterns.
-Only create a BELOW_RISK_BID alert when the accepted bid that triggered this run is strictly lower than the fetched risk threshold.
+  const graph = new StateGraph(MessagesAnnotation)
+    .addNode('agent', agentNode)
+    .addNode('tools', toolNode)
+    .addEdge(START, 'agent')
+    .addConditionalEdges('agent', shouldContinue)
+    .addEdge('tools', 'agent')
+    .compile();
 
-IMPORTANT: When writing alert descriptions, always express monetary amounts in rupees (₹) format, never in paise. Divide paise values by 100 to get rupees.
-
-If no anomaly is detected, return {"anomaly_detected": false}.
-If anomaly is detected, return {"anomaly_detected": true} after creating the alert(s).
-
-Return ONLY the JSON object, no other text.`;
+  const systemPrompt = buildSystemPrompt(input);
 
   try {
-    const { toolCalls, tokensUsed, finalContent } = await runReactLoop(model, tools, prompt);
+    const finalState = await graph.invoke(
+      { messages: [{ role: 'user', content: systemPrompt }] },
+      { recursionLimit: ANOMALY.MAX_ITERATIONS },
+    );
 
-    const jsonMatch = finalContent.match(/\{[\s\S]*\}/);
-    const parsed = jsonMatch ? (JSON.parse(jsonMatch[0]) as { anomaly_detected?: boolean }) : {};
+    // Collect tool calls from graph messages
+    const toolCalls: Array<{ tool_name: string; input: unknown; output: unknown }> = [];
+    const messages = finalState.messages as AIMessage[];
 
-    return { anomalyDetected: parsed.anomaly_detected ?? false, toolCalls, tokensUsed };
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        for (const tc of msg.tool_calls) {
+          const responseMsg = messages[i + 1];
+          toolCalls.push({
+            tool_name: tc.name,
+            input:     tc.args,
+            output:    responseMsg?.content ?? null,
+          });
+        }
+      }
+    }
+
+    // Sum token usage across all AI messages
+    const tokensUsed = messages.reduce((total, msg) => {
+      const usage = (msg as AIMessage & { usage_metadata?: { total_tokens?: number } }).usage_metadata;
+      return total + (usage?.total_tokens ?? 0);
+    }, 0);
+
+    // anomalyDetected is determined by AgentsService querying auction_alerts by
+    // agentRunId after the agent completes — raise_alert tool handles the DB side-effect
+    return { anomalyDetected: false, toolCalls, tokensUsed };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return { anomalyDetected: false, toolCalls: [], tokensUsed: 0, error: message };
