@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { auctionsApi, bidsApi, vendorsApi, agentsApi } from '@/lib/api';
-import type { AuctionRow, BidRow as BidRowData, VendorRow } from '@/lib/types';
+import type { AuctionRow, BidRow as BidRowData, VendorRow, AuctionAlertRow, AuctionAiMetadata } from '@/lib/types';
 import { AuctionStatus, AuctionType } from '@/lib/types';
 import { AuctionStatusBadge } from '@/components/auction/AuctionStatusBadge';
 import { BidTrendChart } from '@/components/auction/BidTrendChart';
@@ -14,17 +15,20 @@ import { Card } from '@/components/ui/Card';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, Trophy, Gavel } from 'lucide-react';
+import { ArrowLeft, Trophy, Gavel, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AuctionResultsPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id }   = useParams<{ id: string }>();
+  const router   = useRouter();
 
-  const [auction,       setAuction]       = useState<AuctionRow | null>(null);
-  const [bids,          setBids]          = useState<BidRowData[]>([]);
-  const [vendors,       setVendors]       = useState<VendorRow[]>([]);
-  const [recommendation,setRecommendation]= useState<Awaited<ReturnType<typeof agentsApi.recommendation>> | null>(null);
-  const [agentRuns,     setAgentRuns]     = useState<Awaited<ReturnType<typeof agentsApi.runs>>>([]);
+  const [auction,        setAuction]        = useState<AuctionRow | null>(null);
+  const [bids,           setBids]           = useState<BidRowData[]>([]);
+  const [vendors,        setVendors]        = useState<VendorRow[]>([]);
+  const [recommendation, setRecommendation] = useState<Awaited<ReturnType<typeof agentsApi.recommendation>> | null>(null);
+  const [agentRuns,      setAgentRuns]      = useState<Awaited<ReturnType<typeof agentsApi.runs>>>([]);
+  const [priceMetadata,  setPriceMetadata]  = useState<AuctionAiMetadata | null>(null);
+  const [anomalyAlerts,  setAnomalyAlerts]  = useState<AuctionAlertRow[]>([]);
   const [loading,           setLoading]           = useState(true);
   const [awardLoading,      setAwardLoading]      = useState(false);
   const [awardingVendorId,  setAwardingVendorId]  = useState<string | null>(null);
@@ -32,11 +36,13 @@ export default function AuctionResultsPage() {
   const vendorIndexMap = useRef(new Map<string, number>());
 
   const load = useCallback(async () => {
-    const [a, b, v, runs] = await Promise.all([
+    const [a, b, v, runs, meta, alerts] = await Promise.all([
       auctionsApi.get(id),
       bidsApi.list(id),
       vendorsApi.list(),
       agentsApi.runs(id),
+      agentsApi.priceMetadata(id).catch(() => null),
+      agentsApi.alerts(id).catch(() => [] as AuctionAlertRow[]),
     ]);
 
     // Build stable vendor index map
@@ -52,6 +58,8 @@ export default function AuctionResultsPage() {
     setBids(b);
     setVendors(v);
     setAgentRuns(runs);
+    setPriceMetadata(meta ?? null);
+    setAnomalyAlerts(alerts ?? []);
 
     try {
       const rec = await agentsApi.recommendation(id);
@@ -77,14 +85,15 @@ export default function AuctionResultsPage() {
 
   if (loading || !auction) return <FullPageSpinner />;
 
-  const vendorMap     = new Map(vendors.map((v) => [v.id, v]));
-  const winningVendor = recommendation ? vendorMap.get(recommendation.primary_vendor_id ?? "") : undefined;
-  const acceptedBids  = bids.filter((b) => b.status === 'ACCEPTED');
-  const bestBid       = acceptedBids[0];
-  const isForward     = auction.type === AuctionType.FORWARD;
-  const isClosed      = auction.status === AuctionStatus.CLOSED;
-  const isAwarded     = auction.status === AuctionStatus.AWARDED;
-  const noBids        = acceptedBids.length === 0;
+  const vendorMap      = new Map(vendors.map((v) => [v.id, v]));
+  const winningVendor  = recommendation ? vendorMap.get(recommendation.primary_vendor_id ?? "") : undefined;
+  const acceptedBids   = bids.filter((b) => b.status === 'ACCEPTED');
+  const bestBid        = acceptedBids[0];
+  const isForward      = auction.type === AuctionType.FORWARD;
+  const isClosed       = auction.status === AuctionStatus.CLOSED;
+  const isReserveNotMet = auction.status === AuctionStatus.RESERVE_NOT_MET;
+  const isAwarded      = auction.status === AuctionStatus.AWARDED;
+  const noBids         = acceptedBids.length === 0;
 
   // Best bid per vendor, sorted by best price
   const bestBidsByVendor: Array<{ vendorId: string; amount: number }> = Object.values(
@@ -120,6 +129,42 @@ export default function AuctionResultsPage() {
         </div>
       </div>
 
+      {/* Reserve not met banner */}
+      {isReserveNotMet && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-red-400" />
+            <p className="font-semibold text-red-400">Reserve price was not met</p>
+          </div>
+          <p className="text-sm text-text-muted">
+            The auction closed with bids below the minimum acceptable price.
+            You can force close to proceed with awarding, or extend to reopen bidding.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={async () => {
+                await auctionsApi.forceClose(id);
+                await load();
+              }}
+            >
+              Force Close
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                await auctionsApi.extendByMinutes(id, 5);
+                router.push(`/buyer/auctions/${id}/live`);
+              }}
+            >
+              Extend Auction
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -138,7 +183,21 @@ export default function AuctionResultsPage() {
       {bids.length > 0 && (
         <Card>
           <h2 className="text-sm font-semibold text-text-primary mb-3">Price Trend</h2>
-          <BidTrendChart bids={bids} auctionType={auction.type} />
+          <BidTrendChart
+            bids={bids}
+            auctionType={auction.type}
+            ceilingPrice={auction.ceiling_price}
+            isLive={false}
+            marketBenchmark={
+              priceMetadata?.recommended_unit_price != null && priceMetadata?.confidence_level != null
+                ? {
+                    recommendedUnitPrice: priceMetadata.recommended_unit_price,
+                    confidenceLevel:      priceMetadata.confidence_level,
+                  }
+                : undefined
+            }
+            anomalyAlerts={anomalyAlerts}
+          />
         </Card>
       )}
 
