@@ -14,9 +14,12 @@ interface PriceIntelligenceCardProps {
   metadata: AuctionAiMetadata | PriceIntelligenceSuggestion | null;
   loading?: boolean;
   auctionType?: AuctionType;
-  onApply: (data: { ceilingPrice: number; minDecrement: number; riskThreshold?: number | null }) => void;
+  onApply: (data: { openingPrice: number; minDecrement: number; riskThreshold?: number | null }) => void;
   onRegenerate?: () => void;
   summary?: string | null;
+  /** When true: renders as a flat div (no Card wrapper, no internal header, no Apply button).
+   *  Use inside a Modal where the modal itself provides the visual container and action buttons. */
+  flat?: boolean;
 }
 
 const CONFIDENCE_VARIANT: Record<ConfidenceLevel, 'success' | 'warning' | 'danger'> = {
@@ -32,6 +35,7 @@ export function PriceIntelligenceCard({
   onApply,
   onRegenerate,
   summary,
+  flat = false,
 }: PriceIntelligenceCardProps) {
   const isForward = auctionType === AuctionType.FORWARD;
   if (loading) {
@@ -46,16 +50,25 @@ export function PriceIntelligenceCard({
   if (!metadata) return null;
   const suggestionMetadata = 'evidence_sources' in metadata ? metadata : null;
   const hasRecommendation =
-    metadata.ceiling_price != null &&
+    metadata.opening_price != null &&
     metadata.suggested_decrement != null &&
     (!suggestionMetadata || !suggestionMetadata.failure_reason);
 
-  const ceilingPrice  = metadata.ceiling_price      ?? 0;
+  const openingPrice  = metadata.opening_price      ?? 0;
   const minDecrement  = metadata.suggested_decrement ?? 0;
   const riskThreshold = metadata.risk_threshold      ?? 0;
-  const metricCards = hasRecommendation
+
+  // Dynamic label: FLOOR for FORWARD auctions, CEILING for REVERSE/SEALED_BID
+  const openingPriceLabel =
+    'opening_price_type' in metadata && metadata.opening_price_type === 'FLOOR'
+      ? 'Floor Price'
+      : isForward
+        ? 'Floor Price'
+        : 'Ceiling Price';
+
+  const metricCards: Array<{ label: string; value: string; badge?: string; badgeVariant?: 'success' | 'warning' | 'danger' }> = hasRecommendation
     ? [
-        { label: isForward ? 'Floor Price' : 'Ceiling Price', value: formatCurrency(ceilingPrice) },
+        { label: openingPriceLabel,                             value: formatCurrency(openingPrice) },
         { label: isForward ? 'Min Increment' : 'Min Decrement', value: formatCurrency(minDecrement) },
       ]
     : [];
@@ -64,37 +77,65 @@ export function PriceIntelligenceCard({
     metricCards.push({ label: 'Risk Threshold', value: formatCurrency(riskThreshold) });
   }
 
-  return (
-    <Card className={cn('flex flex-col gap-4 border-accent/25 bg-gradient-to-b from-accent/5 to-transparent')}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Sparkles size={14} className="text-accent shrink-0" />
-          <p className="text-sm font-semibold text-text-primary">AI Price Intelligence</p>
+  // Reserve price card — always shown when there is a recommendation
+  if (hasRecommendation) {
+    const reservePrice = 'suggested_reserve_price' in metadata ? metadata.suggested_reserve_price : null;
+    const reserveConf  = 'reserve_confidence' in metadata ? metadata.reserve_confidence : null;
+    if (reservePrice != null && reserveConf != null) {
+      metricCards.push({
+        label:        'Suggested Reserve',
+        value:        formatCurrency(reservePrice),
+        badge:        reserveConf,
+        badgeVariant: reserveConf === 'HIGH' ? 'success' : 'warning',
+      });
+    } else {
+      metricCards.push({
+        label:        'Suggested Reserve',
+        value:        '—',
+        badge:        'LOW DATA',
+        badgeVariant: 'warning',
+      });
+    }
+  }
+
+  const content = (
+    <>
+      {!flat && (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-accent shrink-0" />
+            <p className="text-sm font-semibold text-text-primary">AI Price Intelligence</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {metadata.confidence_level && (
+              <Badge variant={CONFIDENCE_VARIANT[metadata.confidence_level]} size="sm">
+                {metadata.confidence_level} Confidence
+              </Badge>
+            )}
+            {onRegenerate && (
+              <button
+                type="button"
+                onClick={onRegenerate}
+                className="text-text-muted hover:text-text-secondary transition-colors"
+              >
+                <RefreshCw size={13} />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {metadata.confidence_level && (
-            <Badge variant={CONFIDENCE_VARIANT[metadata.confidence_level]} size="sm">
-              {metadata.confidence_level} Confidence
-            </Badge>
-          )}
-          {onRegenerate && (
-            <button
-              type="button"
-              onClick={onRegenerate}
-              className="text-text-muted hover:text-text-secondary transition-colors"
-            >
-              <RefreshCw size={13} />
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {metricCards.length > 0 ? (
-        <div className={cn('grid gap-3', metricCards.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
-          {metricCards.map(({ label, value }) => (
+        <div className={cn('grid gap-3 items-start', metricCards.length <= 2 ? 'grid-cols-2' : metricCards.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4')}>
+          {metricCards.map(({ label, value, badge, badgeVariant }) => (
             <div key={label} className="rounded-lg bg-bg-elevated px-3 py-2.5">
               <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
               <p className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</p>
+              {badge && (
+                <Badge variant={badgeVariant ?? 'warning'} size="sm" className="mt-1">
+                  {badge}
+                </Badge>
+              )}
             </div>
           ))}
         </div>
@@ -143,12 +184,12 @@ export function PriceIntelligenceCard({
         </p>
       )}
 
-      {hasRecommendation && (
+      {!flat && hasRecommendation && (
         <Button
           variant="secondary"
           size="sm"
           onClick={() => onApply({
-            ceilingPrice,
+            openingPrice: openingPrice,
             minDecrement,
             riskThreshold: metadata.risk_threshold,
           })}
@@ -157,6 +198,16 @@ export function PriceIntelligenceCard({
           Apply Suggestions
         </Button>
       )}
+    </>
+  );
+
+  if (flat) {
+    return <div className="flex flex-col gap-4">{content}</div>;
+  }
+
+  return (
+    <Card className={cn('flex flex-col gap-4 border-accent/25 bg-gradient-to-b from-accent/5 to-transparent')}>
+      {content}
     </Card>
   );
 }
