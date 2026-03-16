@@ -6,7 +6,7 @@ import {
   connectSocket, joinAuction, leaveAuction,
   onBidAccepted, onBidRejected, onBidConfirmed,
   onAuctionExtended, onAuctionClosed, onYourRank, onOutbid,
-  onAuctionPaused, onAuctionResumed,
+  onAuctionPaused, onAuctionResumed, onAuctionAwarded, onAuctionCancelled, onReconnect,
 } from '@/lib/socket';
 import { auctionsApi, bidsApi, invitationsApi } from '@/lib/api';
 import { getAccessToken } from '@/lib/supabase';
@@ -135,6 +135,21 @@ export default function VendorBidPage() {
         showToast('Auction has resumed — bidding is live again', 'info');
       });
 
+      const offAwarded = onAuctionAwarded(() => {
+        showToast('Auction awarded. Redirecting to results…', 'info');
+        setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3_000);
+      });
+
+      const offCancelled = onAuctionCancelled(() => {
+        showToast('This auction has been cancelled.', 'info');
+        setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3_000);
+      });
+
+      const offReconnect = onReconnect(() => {
+        joinAuction(id, vendorId);
+        void load();
+      });
+
       cleanup = () => {
         offBidAccepted();
         offBidRejected();
@@ -145,6 +160,9 @@ export default function VendorBidPage() {
         offClosed();
         offPaused();
         offResumed();
+        offAwarded();
+        offCancelled();
+        offReconnect();
         leaveAuction(id);
       };
     });
