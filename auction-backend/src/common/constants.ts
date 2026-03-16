@@ -38,26 +38,63 @@ export const AGENT_QUERY = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Anomaly detection
+// Anomaly detection (two-tier system)
 // ---------------------------------------------------------------------------
 
 export const ANOMALY = {
+  // Tier 1 — CircularBuffer config
+  /** Maximum bids retained per auction in the in-memory sliding window. */
+  WINDOW_SIZE: 30,
+
+  // COORDINATED_TIMING: 2+ vendors, 4+ bids within this window
   /**
-   * Two consecutive bids separated by less than this many milliseconds are
-   * flagged as a "rapid pair" — the core collusion detection signal.
-   * Must match the 3-second rate limit enforced in the accept_bid_transaction RPC.
+   * Two consecutive bids separated by less than this many milliseconds trigger
+   * the rapid-pair check in COORDINATED_TIMING detection.
    */
-  COLLUSION_RAPID_WINDOW_MS: 3_000,
+  COLLUSION_RAPID_WINDOW_MS:  8_000,
   /**
-   * Minimum number of accepted bids in the window required before the
-   * timing-pattern analysis runs. Fewer bids cannot form a meaningful pattern.
+   * Minimum number of bids in the sliding window required before the
+   * COORDINATED_TIMING check can produce a meaningful result.
    */
-  COLLUSION_MIN_BIDS: 4,
+  COLLUSION_MIN_BIDS:         4,
   /**
-   * Minimum number of rapid alternating pairs found before a COLLUSION_SIGNAL
-   * alert is raised. Set to 2 to avoid false positives from a single coincidence.
+   * Minimum number of rapid alternating pairs found before a COORDINATED_TIMING
+   * flag is raised. Set to 2 to avoid false positives from a single coincidence.
    */
-  COLLUSION_MIN_PAIRS: 2,
+  COLLUSION_MIN_PAIRS:        2,
+
+  // SCRIPTED_BIDDING: CV of inter-bid intervals for one vendor below this
+  /**
+   * Coefficient of variation (stdDev/mean) threshold for inter-bid intervals.
+   * A CV below this value indicates machine-like regularity in bid timing.
+   */
+  SCRIPTED_CV_THRESHOLD:      0.15,
+  /**
+   * Minimum bids from a single vendor needed to compute a meaningful CV.
+   */
+  SCRIPTED_MIN_BIDS:          5,
+
+  // EXTREME_DROP: single drop exceeds this multiple of the median drop
+  /**
+   * If the incoming drop exceeds this multiple of the median historical drop,
+   * the bid is flagged as EXTREME_DROP.
+   */
+  EXTREME_DROP_MULTIPLIER:    5,
+  /**
+   * Minimum number of prior bids required to compute a stable median drop.
+   */
+  EXTREME_DROP_MIN_WINDOW:    5,
+
+  // Tier 2 gating — fire agent only when:
+  // (a) any HIGH severity flag, OR (b) 2+ flags regardless of severity
+  /**
+   * Minimum number of flags (any severity) required to trigger the Tier 2 agent
+   * when no HIGH flag is present.
+   */
+  TIER2_MIN_FLAGS_FOR_MEDIUM: 2,
+
+  /** ReAct loop hard ceiling — prevents runaway LLM loops. */
+  MAX_ITERATIONS:             5,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -193,6 +230,20 @@ export const PRICE_INTELLIGENCE = {
    * prices over EMI/accessory prices that score similarly on entity match.
    */
   CANDIDATE_SCORE_TIE_THRESHOLD: 0.08,
+  /**
+   * Buffer applied above the benchmark to derive the suggested reserve price
+   * for REVERSE and SEALED_BID auctions. 0.05 = reserve is 5% above benchmark,
+   * meaning it sits between the benchmark and the ceiling price (which is 10% above).
+   * Bids at or below the reserve represent fair market value for the buyer.
+   */
+  RESERVE_REVERSE_BUFFER_COEFFICIENT: 0.05,
+  /**
+   * Buffer applied below the benchmark to derive the suggested reserve price
+   * for FORWARD auctions. 0.05 = reserve is 5% below benchmark, sitting between
+   * the benchmark and the floor price (which is 10% below).
+   * Bids at or above the reserve represent fair market value for the seller.
+   */
+  RESERVE_FORWARD_BUFFER_COEFFICIENT: 0.05,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -219,4 +270,34 @@ export const TRAFFIC_LIGHT = {
 export const HTTP = {
   /** Global API route prefix applied in main.ts. */
   API_PREFIX: 'api/v1',
+} as const;
+
+// ---------------------------------------------------------------------------
+// WebSocket / Realtime
+// ---------------------------------------------------------------------------
+
+export const REALTIME = {
+  /**
+   * Interval at which the server pings each connected client to confirm
+   * the transport is still alive. 15s is the Socket.IO recommended default.
+   */
+  PING_INTERVAL_MS: 15_000,
+  /**
+   * Time the server waits for a pong reply before treating the socket as
+   * disconnected. Must be less than PING_INTERVAL_MS.
+   */
+  PING_TIMEOUT_MS: 5_000,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export const NOTIFICATIONS = {
+  /**
+   * Window in which an identical notification (same type + title + body)
+   * is considered a duplicate and suppressed. Prevents notification storms
+   * from rapid-fire service calls (e.g. scheduler loops).
+   */
+  DEDUPE_WINDOW_MS: 10_000,
 } as const;
