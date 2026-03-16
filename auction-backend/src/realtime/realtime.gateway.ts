@@ -16,7 +16,6 @@ import { RealtimeService } from './realtime.service';
 import { VendorsService } from '../vendors/vendors.service';
 
 @WebSocketGateway({
-  cors: { origin: '*' },
   namespace: '/',
 })
 export class RealtimeGateway
@@ -24,6 +23,9 @@ export class RealtimeGateway
 {
   @WebSocketServer()
   server!: Server;
+
+  /** Maps socketId → auctionId so handleDisconnect can find the auction to update. */
+  private readonly socketAuctions = new Map<string, string>();
 
   private readonly authClient: SupabaseClient;
 
@@ -59,8 +61,13 @@ export class RealtimeGateway
     await client.join(`user:${data.user.id}`);
   }
 
-  handleDisconnect(_client: Socket): void {
-    // Socket.IO automatically removes the socket from all rooms on disconnect
+  async handleDisconnect(client: Socket): Promise<void> {
+    const auctionId = this.socketAuctions.get(client.id);
+    if (auctionId) {
+      this.socketAuctions.delete(client.id);
+      const count = await this.realtimeService.getVendorParticipantCount(auctionId);
+      this.realtimeService.emitParticipantsChanged(auctionId, count);
+    }
   }
 
   @SubscribeMessage('join_auction')
@@ -82,14 +89,25 @@ export class RealtimeGateway
       }
     }
 
-    void client.join(`auction:${payload.auctionId}`);
+    await client.join(`auction:${payload.auctionId}`);
+    this.socketAuctions.set(client.id, payload.auctionId);
+    const count = await this.realtimeService.getVendorParticipantCount(
+      payload.auctionId,
+    );
+    this.realtimeService.emitParticipantsChanged(payload.auctionId, count);
   }
 
   @SubscribeMessage('leave_auction')
-  handleLeaveAuction(
+  async handleLeaveAuction(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { auctionId: string },
-  ): void {
-    void client.leave(`auction:${payload.auctionId}`);
+  ): Promise<void> {
+    await client.leave(`auction:${payload.auctionId}`);
+    const auctionId = this.socketAuctions.get(client.id);
+    if (auctionId) {
+      this.socketAuctions.delete(client.id);
+      const count = await this.realtimeService.getVendorParticipantCount(auctionId);
+      this.realtimeService.emitParticipantsChanged(auctionId, count);
+    }
   }
 }

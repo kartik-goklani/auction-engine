@@ -6,6 +6,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { globalValidationPipe } from './common/pipes/validation.pipe';
 import { LoggerService } from './common/logger/logger.service';
+import { SocketIoAdapter } from './realtime/socket-io.adapter';
 
 /**
  * Application bootstrap.
@@ -19,6 +20,8 @@ async function bootstrap(): Promise<void> {
   app.useLogger(logger);
 
   const config = app.get(ConfigService);
+
+  app.useWebSocketAdapter(new SocketIoAdapter(app, config));
 
   app.setGlobalPrefix(HTTP.API_PREFIX);
   app.useGlobalPipes(globalValidationPipe);

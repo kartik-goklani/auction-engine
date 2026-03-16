@@ -1,9 +1,8 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { NotificationsRepository, type NotificationRow } from './notifications.repository';
 import { RealtimeService } from '../realtime/realtime.service';
+import { NOTIFICATIONS } from '../common/constants';
 import type { NotificationType } from '../common/types';
-
-const DEDUPE_WINDOW_MS = 10_000;
 
 @Injectable()
 export class NotificationsService {
@@ -37,7 +36,7 @@ export class NotificationsService {
     metadata?: Record<string, unknown>,
   ): Promise<void> {
     const signature = this.buildSignature(type, title, body, metadata);
-    const sinceIso = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
+    const sinceIso = new Date(Date.now() - NOTIFICATIONS.DEDUPE_WINDOW_MS).toISOString();
     const recentNotifications = await this.notificationsRepository.findRecentByUser(userId, sinceIso);
     const duplicateExists = recentNotifications.some((notification) => (
       this.buildSignature(

@@ -32,8 +32,29 @@ export interface AuctionExtendedPayload {
 }
 
 export interface AuctionClosedPayload {
-  finalAmount: number;
+  auctionId: string;
   timestamp: string;
+}
+
+export interface AuctionOpenedPayload {
+  auctionId: string;
+  startedAt: string;
+}
+
+export interface AuctionAwardedPayload {
+  auctionId: string;
+  winningVendorId: string;
+}
+
+export interface AuctionCancelledPayload {
+  auctionId: string;
+  reason?: string;
+  cancelledAt: string;
+}
+
+export interface ParticipantsChangedPayload {
+  auctionId: string;
+  vendorCount: number;
 }
 
 export interface AlertRaisedPayload {
@@ -146,5 +167,48 @@ export class RealtimeService {
       auctionId,
       resumedAt: new Date().toISOString(),
     });
+  }
+
+  emitAuctionClosed(auctionId: string, timestamp: string): void {
+    this.emitToAuction(auctionId, 'auction_closed', { auctionId, timestamp });
+  }
+
+  emitAuctionOpened(auctionId: string): void {
+    this.emitToAuction(auctionId, 'auction_opened', {
+      auctionId,
+      startedAt: new Date().toISOString(),
+    });
+  }
+
+  emitAuctionAwarded(auctionId: string, winningVendorId: string): void {
+    this.emitToAuction(auctionId, 'auction_awarded', { auctionId, winningVendorId });
+  }
+
+  emitAuctionCancelled(auctionId: string, reason?: string): void {
+    this.emitToAuction(auctionId, 'auction_cancelled', {
+      auctionId,
+      reason,
+      cancelledAt: new Date().toISOString(),
+    });
+  }
+
+  emitParticipantsChanged(auctionId: string, vendorCount: number): void {
+    this.emitToAuction(auctionId, 'participants_changed', { auctionId, vendorCount });
+  }
+
+  /**
+   * Fetch the count of unique vendors currently connected to an auction room.
+   * Uses Socket.IO's fetchSockets() to get real-time participant data.
+   * Deduplicates by userId to handle multi-tab scenarios correctly.
+   */
+  async getVendorParticipantCount(auctionId: string): Promise<number> {
+    if (!this.server) return 0;
+    const sockets = await this.server.in(`auction:${auctionId}`).fetchSockets();
+    const uniqueVendorIds = new Set(
+      sockets
+        .filter((s) => s.data['role'] === 'vendor')
+        .map((s) => s.data['userId'] as string),
+    );
+    return uniqueVendorIds.size;
   }
 }
