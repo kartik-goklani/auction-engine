@@ -23,6 +23,7 @@ export interface AuctionRow {
   end_time: string | null;
   ceiling_price: number;
   reserve_price: number | null;
+  reserve_price_enabled: boolean;
   min_decrement: number;
   auto_extend_enabled: boolean;
   auto_extend_minutes: number;
@@ -85,6 +86,7 @@ export class AuctionsRepository {
         end_time: dto.endTime ?? null,
         ceiling_price: dto.ceilingPrice,
         reserve_price: dto.reservePrice ?? null,
+        reserve_price_enabled: dto.reservePriceEnabled ?? false,
         min_decrement: dto.minDecrement ?? AUCTION_DEFAULTS.MIN_DECREMENT,
         auto_extend_enabled: dto.autoExtendEnabled ?? AUCTION_DEFAULTS.AUTO_EXTEND_ENABLED,
         auto_extend_minutes: dto.autoExtendMinutes ?? AUCTION_DEFAULTS.AUTO_EXTEND_MINUTES,

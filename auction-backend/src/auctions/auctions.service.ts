@@ -12,12 +12,17 @@ import {
   type AuditLogRow,
 } from './auctions.repository';
 import { AgentsService } from '../agents/agents.service';
+import { AnomalyWindowService } from '../agents/anomaly-detection/anomaly-window.service';
+import { getCanonicalRiskThresholdContext } from '../agents/anomaly-detection/anomaly-detection.helpers';
 import { AuditService } from '../audit/audit.service';
+import { DatabaseService } from '../common/database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { VendorsService } from '../vendors/vendors.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { BidsRepository } from '../bids/bids.repository';
 import {
   AuctionStatus,
+  AuctionType,
   ActorType,
   NotificationType,
   InvitationStatus,
@@ -26,15 +31,26 @@ import type { CreateAuctionDto } from './dto/create-auction.dto';
 import type { UpdateAuctionDto } from './dto/update-auction.dto';
 import type { CreateLotDto } from './dto/create-lot.dto';
 
+export interface CloseAuctionResult {
+  status: AuctionStatus.CLOSED | AuctionStatus.RESERVE_NOT_MET;
+  reserveNotMetDetails?: {
+    best_bid: number;
+    reserve_price: number;
+    gap_amount: number;
+    gap_pct: number;
+  };
+}
+
 /** Valid forward-only state transitions. CANCELLED is allowed from any state. */
 const VALID_TRANSITIONS: Record<AuctionStatus, AuctionStatus[]> = {
-  [AuctionStatus.DRAFT]: [AuctionStatus.PUBLISHED, AuctionStatus.CANCELLED],
-  [AuctionStatus.PUBLISHED]: [AuctionStatus.OPEN, AuctionStatus.CANCELLED],
-  [AuctionStatus.OPEN]: [AuctionStatus.PAUSED, AuctionStatus.CLOSED, AuctionStatus.CANCELLED],
-  [AuctionStatus.PAUSED]: [AuctionStatus.OPEN, AuctionStatus.CLOSED, AuctionStatus.CANCELLED],
-  [AuctionStatus.CLOSED]: [AuctionStatus.AWARDED, AuctionStatus.CANCELLED],
-  [AuctionStatus.AWARDED]: [AuctionStatus.CANCELLED],
-  [AuctionStatus.CANCELLED]: [],
+  [AuctionStatus.DRAFT]:           [AuctionStatus.PUBLISHED, AuctionStatus.CANCELLED],
+  [AuctionStatus.PUBLISHED]:       [AuctionStatus.OPEN, AuctionStatus.CANCELLED],
+  [AuctionStatus.OPEN]:            [AuctionStatus.PAUSED, AuctionStatus.CLOSED, AuctionStatus.RESERVE_NOT_MET, AuctionStatus.CANCELLED],
+  [AuctionStatus.PAUSED]:          [AuctionStatus.OPEN, AuctionStatus.CLOSED, AuctionStatus.CANCELLED],
+  [AuctionStatus.RESERVE_NOT_MET]: [AuctionStatus.OPEN, AuctionStatus.CLOSED, AuctionStatus.CANCELLED],
+  [AuctionStatus.CLOSED]:          [AuctionStatus.AWARDED, AuctionStatus.CANCELLED],
+  [AuctionStatus.AWARDED]:         [AuctionStatus.CANCELLED],
+  [AuctionStatus.CANCELLED]:       [],
 };
 
 @Injectable()
@@ -42,10 +58,13 @@ export class AuctionsService {
   constructor(
     private readonly auctionsRepository: AuctionsRepository,
     private readonly agentsService: AgentsService,
+    private readonly anomalyWindowService: AnomalyWindowService,
+    private readonly db: DatabaseService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
     private readonly vendorsService: VendorsService,
     private readonly realtimeService: RealtimeService,
+    private readonly bidsRepository: BidsRepository,
   ) {}
 
   async create(buyerId: string, dto: CreateAuctionDto): Promise<AuctionRow> {
@@ -191,24 +210,139 @@ export class AuctionsService {
   }
 
   async open(id: string, buyerId: string): Promise<AuctionRow> {
-    return this.transition(id, buyerId, AuctionStatus.OPEN, 'AUCTION_OPENED');
+    const auction = await this.transition(id, buyerId, AuctionStatus.OPEN, 'AUCTION_OPENED');
+    // Fetch risk threshold once — cached for the auction lifetime, eliminating per-bid DB round-trips
+    const riskCtx = await getCanonicalRiskThresholdContext(this.db.getClient(), auction.id);
+    this.anomalyWindowService.initAuction(auction.id, riskCtx.riskThreshold ?? null);
+    this.realtimeService.emitAuctionOpened(id);
+    return auction;
   }
 
-  async close(id: string, buyerId: string): Promise<AuctionRow> {
-    const auction = await this.transition(id, buyerId, AuctionStatus.CLOSED, 'AUCTION_CLOSED');
+  async close(id: string, buyerId: string, forceClose = false): Promise<CloseAuctionResult> {
+    const auction = await this.auctionsRepository.findById(id);
+    this.assertOwner(auction, buyerId);
+
+    // ── Force close path (buyer overriding from RESERVE_NOT_MET) ───────────
+    if (forceClose) {
+      this.assertTransitionAllowed(auction.status, AuctionStatus.CLOSED);
+      await this.auctionsRepository.updateStatus(id, AuctionStatus.CLOSED);
+      this.anomalyWindowService.clearAuction(id);
+
+      void this.auditService.log({
+        auctionId: id,
+        actorId: buyerId,
+        actorType: ActorType.BUYER,
+        action: 'RESERVE_ENFORCEMENT',
+        metadata: { force_close: true, reserve_price: auction.reserve_price },
+      });
+
+      this.realtimeService.emitAuctionClosed(id, new Date().toISOString());
+
+      this.notificationsService.send(
+        auction.buyer_id,
+        NotificationType.AUCTION_CLOSED,
+        `Auction "${auction.title}" has closed`,
+        'The auction has been force-closed. Review the results and issue the award.',
+        { auctionId: id },
+      );
+
+      this.agentsService.runAwardRecommendation(id);
+
+      return { status: AuctionStatus.CLOSED };
+    }
+
+    // ── Reserve price check ─────────────────────────────────────────────────
+    if (auction.reserve_price_enabled && auction.reserve_price !== null) {
+      const bestBidRow = await this.bidsRepository.getBestBid(id, auction.type);
+      const bestBid = bestBidRow?.amount ?? null;
+
+      const reserveFailed =
+        bestBid === null ||
+        (auction.type === AuctionType.FORWARD
+          ? bestBid < auction.reserve_price
+          : bestBid > auction.reserve_price); // REVERSE and SEALED_BID
+
+      if (reserveFailed && bestBid !== null) {
+        this.assertTransitionAllowed(auction.status, AuctionStatus.RESERVE_NOT_MET);
+        await this.auctionsRepository.updateStatus(id, AuctionStatus.RESERVE_NOT_MET);
+
+        const gapAmount = Math.abs(auction.reserve_price - bestBid);
+        const gapPct = Math.round((gapAmount / auction.reserve_price) * 10000) / 100;
+
+        void this.auditService.log({
+          auctionId: id,
+          actorId: buyerId,
+          actorType: ActorType.BUYER,
+          action: 'RESERVE_ENFORCEMENT',
+          metadata: {
+            best_bid: bestBid,
+            reserve_price: auction.reserve_price,
+            reserve_met: false,
+            force_close: false,
+          },
+        });
+
+        return {
+          status: AuctionStatus.RESERVE_NOT_MET,
+          reserveNotMetDetails: {
+            best_bid: bestBid,
+            reserve_price: auction.reserve_price,
+            gap_amount: gapAmount,
+            gap_pct: gapPct,
+          },
+        };
+      }
+
+      // No bids at all — still fail the reserve check
+      if (reserveFailed && bestBid === null) {
+        this.assertTransitionAllowed(auction.status, AuctionStatus.RESERVE_NOT_MET);
+        await this.auctionsRepository.updateStatus(id, AuctionStatus.RESERVE_NOT_MET);
+
+        void this.auditService.log({
+          auctionId: id,
+          actorId: buyerId,
+          actorType: ActorType.BUYER,
+          action: 'RESERVE_ENFORCEMENT',
+          metadata: { best_bid: null, reserve_price: auction.reserve_price, reserve_met: false, force_close: false },
+        });
+
+        return {
+          status: AuctionStatus.RESERVE_NOT_MET,
+          reserveNotMetDetails: {
+            best_bid: 0,
+            reserve_price: auction.reserve_price,
+            gap_amount: auction.reserve_price,
+            gap_pct: 100,
+          },
+        };
+      }
+    }
+
+    // ── Normal close path ──────────────────────────────────────────────────
+    this.assertTransitionAllowed(auction.status, AuctionStatus.CLOSED);
+    await this.auctionsRepository.updateStatus(id, AuctionStatus.CLOSED);
+    this.anomalyWindowService.clearAuction(id);
+
+    void this.auditService.log({
+      auctionId: id,
+      actorId: buyerId,
+      actorType: ActorType.BUYER,
+      action: 'AUCTION_CLOSED',
+    });
 
     this.notificationsService.send(
       auction.buyer_id,
       NotificationType.AUCTION_CLOSED,
       `Auction "${auction.title}" has closed`,
       'The auction has ended. Review the results and issue the award.',
-      { auctionId: auction.id },
+      { auctionId: id },
     );
 
-    // Non-blocking: award recommendation runs in the background
-    this.agentsService.runAwardRecommendation(auction.id);
+    this.agentsService.runAwardRecommendation(id);
 
-    return auction;
+    this.realtimeService.emitAuctionClosed(id, new Date().toISOString());
+
+    return { status: AuctionStatus.CLOSED };
   }
 
   async pause(id: string, buyerId: string, reason?: string): Promise<AuctionRow> {
@@ -270,6 +404,7 @@ export class AuctionsService {
     const updated = await this.auctionsRepository.updateStatus(id, AuctionStatus.AWARDED, {
       winning_vendor_id: winningVendorId,
     });
+    this.realtimeService.emitAuctionAwarded(id, winningVendorId);
     void this.auditService.log({
       auctionId: id,
       actorId: buyerId,
@@ -288,6 +423,11 @@ export class AuctionsService {
     const updated = await this.auctionsRepository.updateStatus(id, AuctionStatus.CANCELLED, {
       cancellation_reason: reason,
     });
+
+    // Free the in-memory bid window if it exists (no-op if auction wasn't OPEN)
+    this.anomalyWindowService.clearAuction(id);
+
+    this.realtimeService.emitAuctionCancelled(id, reason);
 
     this.auditService.log({
       auctionId: id,
@@ -386,8 +526,8 @@ export class AuctionsService {
     const auction = await this.auctionsRepository.findById(id);
     this.assertOwner(auction, buyerId);
 
-    if (auction.status !== AuctionStatus.OPEN) {
-      throw new UnprocessableEntityException('Only OPEN auctions can be extended');
+    if (auction.status !== AuctionStatus.OPEN && auction.status !== AuctionStatus.RESERVE_NOT_MET) {
+      throw new UnprocessableEntityException('Only OPEN or RESERVE_NOT_MET auctions can be extended');
     }
 
     const base = auction.end_time ? new Date(auction.end_time) : new Date();
@@ -453,6 +593,11 @@ export class AuctionsService {
     for (const auction of due) {
       try {
         await this.auctionsRepository.updateStatus(auction.id, AuctionStatus.OPEN);
+        // Fetch risk threshold once per auction open — cached for lifetime, no per-bid DB cost
+        const riskCtx = await getCanonicalRiskThresholdContext(this.db.getClient(), auction.id);
+        this.anomalyWindowService.initAuction(auction.id, riskCtx.riskThreshold ?? null);
+
+        this.realtimeService.emitAuctionOpened(auction.id);
 
         this.auditService.log({
           auctionId: auction.id,
@@ -487,15 +632,20 @@ export class AuctionsService {
    */
   async autoCloseDueAuctions(): Promise<void> {
     const now = new Date().toISOString();
-    const due = await this.auctionsRepository.findByStatusAndTime(
-      AuctionStatus.OPEN,
-      'end_time',
-      now,
-    );
+    // Query both OPEN and PAUSED — a PAUSED auction whose end_time has passed
+    // must also be closed and have its in-memory window freed.
+    const [openDue, pausedDue] = await Promise.all([
+      this.auctionsRepository.findByStatusAndTime(AuctionStatus.OPEN,   'end_time', now),
+      this.auctionsRepository.findByStatusAndTime(AuctionStatus.PAUSED, 'end_time', now),
+    ]);
+    const due = [...openDue, ...pausedDue];
 
     for (const auction of due) {
       try {
         await this.auctionsRepository.updateStatus(auction.id, AuctionStatus.CLOSED);
+        this.anomalyWindowService.clearAuction(auction.id);
+
+        this.realtimeService.emitAuctionClosed(auction.id, new Date().toISOString());
 
         this.auditService.log({
           auctionId: auction.id,

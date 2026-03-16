@@ -55,6 +55,10 @@ export class CreateAuctionDto {
   reservePrice?: number;
 
   @IsOptional()
+  @IsBoolean()
+  reservePriceEnabled?: boolean;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   minDecrement?: number;

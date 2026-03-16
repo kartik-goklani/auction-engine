@@ -73,7 +73,12 @@ export class AuctionsController {
 
   @Patch(':id/close')
   close(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
-    return this.auctionsService.close(id, user.id);
+    return this.auctionsService.close(id, user.id, false);
+  }
+
+  @Patch(':id/force-close')
+  forceClose(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
+    return this.auctionsService.close(id, user.id, true);
   }
 
   @Patch(':id/award')
