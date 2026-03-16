@@ -10,7 +10,11 @@ import { buildPriceRecommendation, type WebEvidenceSignal } from './price-intell
 import type { SerperSearchConfig } from '../../common/lib/serper.client';
 
 export interface PriceIntelligenceOutput {
-  ceiling_price: number;
+  opening_price:            number;
+  opening_price_type:       'CEILING' | 'FLOOR';
+  suggested_reserve_price:  number | null;
+  reserve_price_basis:      'benchmark_plus_5pct' | 'benchmark_minus_5pct' | 'insufficient_evidence';
+  reserve_confidence:       'HIGH' | 'MEDIUM' | null;
   suggested_decrement: number;
   risk_threshold: number | null;
   confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -73,7 +77,10 @@ export async function runPriceIntelligenceAgent(
       ? 'No buyer-entered price has been provided yet.'
       : `Buyer-entered price context: ${currentCeilingPrice} paise (₹${(currentCeilingPrice / 100).toFixed(2)}).`;
 
-  const prompt = `You are a procurement price intelligence agent analysing an item for a ${auctionType} auction.
+  // Phase 1 prompt: tool-gathering only. Summary is generated in Phase 2 after
+  // buildPriceRecommendation runs, so the LLM receives the computed reserve price
+  // value and cannot invent its own numbers.
+  const toolGatherPrompt = `You are a procurement price intelligence agent analysing an item for a ${auctionType} auction.
 
 Item: "${title}"
 Category: "${category}"
@@ -89,13 +96,12 @@ Steps:
 2. Call get_historical_auction_data to find past auctions in this category.
 3. Call get_category_risk_stats to understand vendor risk.
 4. If you obtained historical bid amounts, call calculate_price_statistics.
-5. Write a 2-sentence analysis_summary of what you found and why the recommendation makes sense.
 
-Return only the JSON: { "analysis_summary": "..." }
+Return only: {}
 Trace context: ${traceContextId}`;
 
   try {
-    const { toolCalls, tokensUsed, finalContent } = await runReactLoop(model, tools, prompt);
+    const { toolCalls, tokensUsed: toolTokens } = await runReactLoop(model, tools, toolGatherPrompt);
 
     // Extract web signals from the search_web_pricing_evidence tool call
     const webToolCall = toolCalls.find((tc) => tc.tool_name === 'search_web_pricing_evidence');
@@ -135,9 +141,37 @@ Trace context: ${traceContextId}`;
       auctionType,
     });
 
-    // Parse analysis_summary from LLM output
+    // Phase 2: generate analysis_summary in a separate single LLM call now that
+    // we have the computed recommendation (including reserve price). This guarantees
+    // the LLM can only reference values we explicitly provide — no invented numbers.
+    const openingLabel = recommendation.opening_price_type === 'FLOOR' ? 'Floor' : 'Ceiling';
+    const reserveLine =
+      recommendation.suggested_reserve_price != null
+        ? `Suggested reserve price: ₹${(recommendation.suggested_reserve_price / 100).toLocaleString('en-IN')} (${recommendation.reserve_confidence} confidence).`
+        : `Suggested reserve price: not available — insufficient market evidence.`;
+    const reserveInstruction =
+      recommendation.suggested_reserve_price != null
+        ? `Include ONE sentence explaining the reserve price (₹${(recommendation.suggested_reserve_price / 100).toLocaleString('en-IN')}) represents the recommended ${recommendation.opening_price_type === 'FLOOR' ? 'minimum' : 'maximum'} award price and represents fair market value for this procurement.`
+        : `Include ONE sentence stating that a reserve price could not be reliably estimated due to insufficient market data, and the buyer should set it manually.`;
+
+    const summaryPrompt = `Write a 2-sentence analysis_summary for a ${auctionType} auction procurement of "${title}" (${category}).
+
+Evidence: ${recommendation.market_context}
+Confidence: ${recommendation.confidence_level}
+${openingLabel} price: ₹${(recommendation.opening_price / 100).toLocaleString('en-IN')}
+${reserveLine}
+
+${reserveInstruction}
+Do NOT invent any numbers. Only reference values stated above.
+Return only JSON: { "analysis_summary": "..." }`;
+
+    const summaryResult = await model.invoke(summaryPrompt);
+    const summaryRaw = typeof summaryResult.content === 'string' ? summaryResult.content : '';
+    const summaryTokens =
+      summaryResult.usage_metadata?.total_tokens ?? 0;
+
     let analysisSummary = 'Price intelligence analysis completed using available market data.';
-    const jsonMatch = finalContent.match(/\{[\s\S]*\}/);
+    const jsonMatch = summaryRaw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0]) as { analysis_summary?: string };
@@ -156,7 +190,7 @@ Trace context: ${traceContextId}`;
       analysis_summary: analysisSummary,
     };
 
-    return { output, toolCalls, tokensUsed };
+    return { output, toolCalls, tokensUsed: toolTokens + summaryTokens };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return { output: null, toolCalls: [], tokensUsed: 0, error: message };

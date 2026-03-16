@@ -1,6 +1,12 @@
 import { PRICE_INTELLIGENCE } from '../../common/constants';
 import type { ProcurementContext } from './price-intelligence.context';
 
+export type OpeningPriceType = 'CEILING' | 'FLOOR';
+export type ReservePriceBasis =
+  | 'benchmark_plus_5pct'
+  | 'benchmark_minus_5pct'
+  | 'insufficient_evidence';
+
 export type EvidenceSourceType =
   | 'MANUFACTURER'
   | 'DISTRIBUTOR'
@@ -24,7 +30,11 @@ export interface WebEvidenceSignal {
 }
 
 export interface PriceRecommendation {
-  ceiling_price: number;
+  opening_price:            number;
+  opening_price_type:       OpeningPriceType;
+  suggested_reserve_price:  number | null;
+  reserve_price_basis:      ReservePriceBasis;
+  reserve_confidence:       'HIGH' | 'MEDIUM' | null;
   suggested_decrement: number;
   risk_threshold: number | null;
   confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -74,10 +84,10 @@ function getBulkDiscount(quantity: number): number {
  * Rules (applied in priority order):
  * 1. pricing_basis === 'TOTAL' → use as-is (already a contract total)
  * 2. pricing_basis === 'PER_UNIT' → multiply by quantity, apply bulk discount
- * 3. pricing_basis === 'UNKNOWN' + commercial source → treat as PER_UNIT
- *    (marketplace/manufacturer/distributor/B2B pages always show unit prices)
- * 4. pricing_basis === 'UNKNOWN' + non-commercial source → use as-is
- *    (news/blog prices are typically already described as totals or ranges)
+ * 3. pricing_basis === 'UNKNOWN' + source not NEWS_OR_BLOG → treat as PER_UNIT
+ *    (any product/retailer page shows unit prices regardless of domain recognition)
+ * 4. pricing_basis === 'UNKNOWN' + NEWS_OR_BLOG → use as-is
+ *    (news prices may describe total budgets or contract values, not unit prices)
  */
 function scaleSignalToTotal(signal: WebEvidenceSignal, quantity: number): number {
   if (quantity <= 1) return signal.amount;
@@ -86,10 +96,9 @@ function scaleSignalToTotal(signal: WebEvidenceSignal, quantity: number): number
     return signal.amount;
   }
 
-  const isUnitPricedSource = UNIT_PRICED_SOURCE_TYPES.has(signal.source_type);
   const shouldScale =
     signal.pricing_basis === 'PER_UNIT' ||
-    (signal.pricing_basis === 'UNKNOWN' && isUnitPricedSource);
+    (signal.pricing_basis === 'UNKNOWN' && signal.source_type !== 'NEWS_OR_BLOG');
 
   if (shouldScale) {
     const total = signal.amount * quantity;
@@ -182,7 +191,11 @@ export function buildPriceRecommendation(input: {
   // No signals and no history → failure
   if (signals.length === 0 && historicalMedian == null) {
     return {
-      ceiling_price: 0,
+      opening_price:           0,
+      opening_price_type:      'CEILING' as OpeningPriceType,
+      suggested_reserve_price: null,
+      reserve_price_basis:     'insufficient_evidence' as ReservePriceBasis,
+      reserve_confidence:      null,
       suggested_decrement: PRICE_INTELLIGENCE.MIN_DECREMENT_PAISE,
       risk_threshold: null,
       confidence_level: 'LOW',
@@ -219,10 +232,20 @@ export function buildPriceRecommendation(input: {
     benchmarkPrice = historicalMedian!;
   }
 
-  // Ceiling / floor based on auction type — benchmark is now total contract value
-  const ceilingPrice = isForward
-    ? Math.round(benchmarkPrice * (1 - PRICE_INTELLIGENCE.FORWARD_FLOOR_BUFFER_COEFFICIENT))
-    : Math.round(benchmarkPrice * (1 + PRICE_INTELLIGENCE.REVERSE_CEILING_BUFFER_COEFFICIENT));
+  // Confidence computed before reserve price so calculateSuggestedReservePrice can receive it.
+  // Depends only on signals.length and historicalMedian — no ordering issue.
+  const confidence: 'HIGH' | 'MEDIUM' | 'LOW' = isStrongEvidence
+    ? 'HIGH'
+    : signals.length > 0 || historicalMedian != null
+      ? 'MEDIUM'
+      : 'LOW';
+
+  // Opening price: ceiling for REVERSE/SEALED_BID, floor for FORWARD
+  const { opening_price, opening_price_type } = calculateOpeningPrice(benchmarkPrice, auctionType);
+
+  // Reserve price: sits between benchmark and opening price, null when evidence is LOW
+  const { suggested_reserve_price, reserve_price_basis, reserve_confidence } =
+    calculateSuggestedReservePrice(benchmarkPrice, auctionType, confidence, opening_price, opening_price_type);
 
   // Decrement: fraction of benchmark, floored at MIN_DECREMENT_PAISE
   const suggestedDecrement = Math.max(
@@ -237,12 +260,6 @@ export function buildPriceRecommendation(input: {
     ? null
     : Math.round(benchmarkPrice * PRICE_INTELLIGENCE.RISK_THRESHOLD_MEDIAN_COEFFICIENT);
 
-  const confidence: 'HIGH' | 'MEDIUM' | 'LOW' = isStrongEvidence
-    ? 'HIGH'
-    : signals.length > 0 || historicalMedian != null
-      ? 'MEDIUM'
-      : 'LOW';
-
   const benchmarkRupees = (benchmarkPrice / 100).toLocaleString('en-IN');
   const unitPrice = context.quantity > 1 ? Math.round(benchmarkPrice / context.quantity) : benchmarkPrice;
   const unitRupees = (unitPrice / 100).toLocaleString('en-IN');
@@ -253,12 +270,93 @@ export function buildPriceRecommendation(input: {
       : `No web evidence found. Using historical auction data. Median: ₹${benchmarkRupees}${qtyLabel}.`;
 
   return {
-    ceiling_price: ceilingPrice,
+    opening_price,
+    opening_price_type,
+    suggested_reserve_price,
+    reserve_price_basis,
+    reserve_confidence,
     suggested_decrement: suggestedDecrement,
     risk_threshold: riskThreshold,
     confidence_level: confidence,
     evidence_sources: evidenceSources,
     market_context: marketContext,
     evidence_breakdown: evidenceBreakdown,
+  };
+}
+
+// ── Phase 3 helpers ───────────────────────────────────────────────────────
+
+/**
+ * Derives the opening price from the benchmark.
+ * For REVERSE and SEALED_BID: 10% above benchmark (ceiling — vendors must beat it downward).
+ * For FORWARD: 10% below benchmark (floor — vendors must bid upward from here).
+ */
+function calculateOpeningPrice(
+  benchmarkPrice: number,
+  auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID',
+): { opening_price: number; opening_price_type: OpeningPriceType } {
+  if (auctionType === 'FORWARD') {
+    return {
+      opening_price:      Math.round(benchmarkPrice * (1 - PRICE_INTELLIGENCE.FORWARD_FLOOR_BUFFER_COEFFICIENT)),
+      opening_price_type: 'FLOOR',
+    };
+  }
+  return {
+    opening_price:      Math.round(benchmarkPrice * (1 + PRICE_INTELLIGENCE.REVERSE_CEILING_BUFFER_COEFFICIENT)),
+    opening_price_type: 'CEILING',
+  };
+}
+
+/**
+ * Derives the suggested reserve price from the benchmark.
+ * Reserve sits between benchmark and opening price — it is the fair-market-value boundary.
+ * Returns null when confidence is LOW; no reliable benchmark means no reliable reserve.
+ *
+ * Sanity assertions check that the reserve always sits on the correct side of the
+ * opening price — they surface any future regression if coefficients are ever changed.
+ */
+function calculateSuggestedReservePrice(
+  benchmarkPrice: number,
+  auctionType: 'REVERSE' | 'FORWARD' | 'SEALED_BID',
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW',
+  opening_price: number,
+  opening_price_type: OpeningPriceType,
+): {
+  suggested_reserve_price: number | null;
+  reserve_price_basis: ReservePriceBasis;
+  reserve_confidence: 'HIGH' | 'MEDIUM' | null;
+} {
+  if (confidence === 'LOW') {
+    return {
+      suggested_reserve_price: null,
+      reserve_price_basis:     'insufficient_evidence',
+      reserve_confidence:      null,
+    };
+  }
+
+  let suggested_reserve_price: number;
+  let reserve_price_basis: ReservePriceBasis;
+
+  if (auctionType === 'FORWARD') {
+    suggested_reserve_price = Math.round(benchmarkPrice * (1 - PRICE_INTELLIGENCE.RESERVE_FORWARD_BUFFER_COEFFICIENT));
+    reserve_price_basis     = 'benchmark_minus_5pct';
+  } else {
+    // REVERSE and SEALED_BID
+    suggested_reserve_price = Math.round(benchmarkPrice * (1 + PRICE_INTELLIGENCE.RESERVE_REVERSE_BUFFER_COEFFICIENT));
+    reserve_price_basis     = 'benchmark_plus_5pct';
+  }
+
+  // Sanity: reserve must sit between benchmark and opening price
+  console.assert(
+    opening_price_type === 'CEILING'
+      ? suggested_reserve_price < opening_price
+      : suggested_reserve_price > opening_price,
+    `Reserve price sanity check failed: reserve=${suggested_reserve_price}, opening=${opening_price}, type=${opening_price_type}`,
+  );
+
+  return {
+    suggested_reserve_price,
+    reserve_price_basis,
+    reserve_confidence: confidence === 'HIGH' ? 'HIGH' : 'MEDIUM',
   };
 }
