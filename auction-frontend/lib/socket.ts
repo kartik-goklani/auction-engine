@@ -23,6 +23,10 @@ import type {
   NotificationEventPayload,
   AuctionPausedPayload,
   AuctionResumedPayload,
+  AuctionOpenedPayload,
+  AuctionAwardedPayload,
+  AuctionCancelledPayload,
+  ParticipantsChangedPayload,
 } from './types';
 
 // ─── Singleton ───────────────────────────────────────────────────────────────
@@ -160,4 +164,41 @@ export function onAgentRunCompleted(
 ): () => void {
   getSocket().on('agent_run_completed', handler);
   return () => getSocket().off('agent_run_completed', handler);
+}
+
+export function onAuctionOpened(
+  handler: (payload: AuctionOpenedPayload) => void,
+): () => void {
+  getSocket().on('auction_opened', handler);
+  return () => getSocket().off('auction_opened', handler);
+}
+
+export function onAuctionAwarded(
+  handler: (payload: AuctionAwardedPayload) => void,
+): () => void {
+  getSocket().on('auction_awarded', handler);
+  return () => getSocket().off('auction_awarded', handler);
+}
+
+export function onAuctionCancelled(
+  handler: (payload: AuctionCancelledPayload) => void,
+): () => void {
+  getSocket().on('auction_cancelled', handler);
+  return () => getSocket().off('auction_cancelled', handler);
+}
+
+export function onParticipantsChanged(
+  handler: (payload: ParticipantsChangedPayload) => void,
+): () => void {
+  getSocket().on('participants_changed', handler);
+  return () => getSocket().off('participants_changed', handler);
+}
+
+/**
+ * Fires each time Socket.IO successfully reconnects after a network interruption.
+ * Caller must re-join auction rooms and re-fetch state.
+ */
+export function onReconnect(handler: () => void): () => void {
+  getSocket().on('reconnect', handler);
+  return () => getSocket().off('reconnect', handler);
 }

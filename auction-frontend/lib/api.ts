@@ -9,6 +9,7 @@ import { getAccessToken } from './supabase';
 import type {
   ApiResponse,
   AuctionRow,
+  AuctionStatus,
   LotRow,
   AuditLogRow,
   BidRow,
@@ -29,6 +30,7 @@ import type {
   ShortlistedVendor,
   AnalyzePriceIntelligencePayload,
   PriceIntelligenceSuggestion,
+  CloseAuctionResponse,
 } from './types';
 
 // ─── Core fetch wrapper ──────────────────────────────────────────────────────
@@ -112,8 +114,12 @@ export const auctionsApi = {
     return apiFetch<AuctionRow>(`/auctions/${id}/open`, { method: 'PATCH' });
   },
 
-  close(id: string): Promise<AuctionRow> {
-    return apiFetch<AuctionRow>(`/auctions/${id}/close`, { method: 'PATCH' });
+  close(id: string): Promise<CloseAuctionResponse> {
+    return apiFetch<CloseAuctionResponse>(`/auctions/${id}/close`, { method: 'PATCH' });
+  },
+
+  forceClose(id: string): Promise<{ status: AuctionStatus }> {
+    return apiFetch<{ status: AuctionStatus }>(`/auctions/${id}/force-close`, { method: 'PATCH' });
   },
 
   award(id: string, winningVendorId: string): Promise<AuctionRow> {

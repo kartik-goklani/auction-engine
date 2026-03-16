@@ -13,13 +13,14 @@ export enum AuctionType {
 }
 
 export enum AuctionStatus {
-  DRAFT     = 'DRAFT',
-  PUBLISHED = 'PUBLISHED',
-  OPEN      = 'OPEN',
-  PAUSED    = 'PAUSED',
-  CLOSED    = 'CLOSED',
-  AWARDED   = 'AWARDED',
-  CANCELLED = 'CANCELLED',
+  DRAFT           = 'DRAFT',
+  PUBLISHED       = 'PUBLISHED',
+  OPEN            = 'OPEN',
+  PAUSED          = 'PAUSED',
+  RESERVE_NOT_MET = 'RESERVE_NOT_MET',
+  CLOSED          = 'CLOSED',
+  AWARDED         = 'AWARDED',
+  CANCELLED       = 'CANCELLED',
 }
 
 export enum TrafficLightStatus {
@@ -156,8 +157,9 @@ export interface AuctionRow {
   buyer_id: string;
   start_time: string | null;
   end_time: string | null;
-  ceiling_price: number;           // paise
+  ceiling_price: number;            // paise
   reserve_price: number | null;    // paise
+  reserve_price_enabled: boolean;
   min_decrement: number;           // paise
   auto_extend_enabled: boolean;
   auto_extend_minutes: number;
@@ -216,6 +218,7 @@ export interface CreateAuctionPayload {
   endTime?: string;
   ceilingPrice: number;
   reservePrice?: number;
+  reservePriceEnabled?: boolean;
   minDecrement?: number;
   autoExtendEnabled?: boolean;
   autoExtendMinutes?: number;
@@ -224,6 +227,20 @@ export interface CreateAuctionPayload {
   trafficLightEnabled?: boolean;
   trafficLightGreenPct?: number;
   trafficLightYellowPct?: number;
+}
+
+// ─── Reserve Price Enforcement ───────────────────────────────────────────────
+
+export interface ReserveNotMetDetails {
+  best_bid:      number;  // paise
+  reserve_price: number;  // paise
+  gap_amount:    number;  // paise
+  gap_pct:       number;  // e.g. 12.50
+}
+
+export interface CloseAuctionResponse {
+  status:                AuctionStatus;
+  reserveNotMetDetails?: ReserveNotMetDetails;
 }
 
 export interface CreateLotPayload {
@@ -313,9 +330,13 @@ export interface AgentRunRow {
 export interface AuctionAiMetadata {
   id: string;
   auction_id: string;
-  ceiling_price: number | null;        // paise
-  suggested_decrement: number | null;  // paise
-  risk_threshold: number | null;       // paise
+  opening_price: number | null;            // paise — replaces ceiling_price (semantically correct for both REVERSE and FORWARD)
+  opening_price_type: string | null;       // 'CEILING' | 'FLOOR'
+  suggested_reserve_price: number | null;  // paise — null when confidence is LOW
+  reserve_price_basis: string | null;      // 'benchmark_plus_5pct' | 'benchmark_minus_5pct' | 'insufficient_evidence'
+  reserve_confidence: string | null;       // 'HIGH' | 'MEDIUM' | null
+  suggested_decrement: number | null;      // paise
+  risk_threshold: number | null;           // paise
   recommended_unit_price: number | null;
   recommended_total_price: number | null;
   comparable_count: number | null;
@@ -374,7 +395,11 @@ export interface PricingTrace {
 export interface PriceIntelligenceSuggestion {
   agent_run_id: string | null;
   analysis_summary: string;
-  ceiling_price: number | null;
+  opening_price: number | null;            // paise — replaces ceiling_price
+  opening_price_type: 'CEILING' | 'FLOOR';
+  suggested_reserve_price: number | null;  // paise — null when confidence is LOW
+  reserve_price_basis: 'benchmark_plus_5pct' | 'benchmark_minus_5pct' | 'insufficient_evidence';
+  reserve_confidence: 'HIGH' | 'MEDIUM' | null;
   suggested_decrement: number | null;
   risk_threshold: number | null;
   recommended_unit_price: number | null;
@@ -400,6 +425,7 @@ export interface AuctionAlertRow {
   id: string;
   auction_id: string;
   agent_run_id: string | null;
+  bid_id: string | null;
   alert_type: AlertType;
   severity: AlertSeverity;
   description: string;
@@ -468,7 +494,7 @@ export interface AuctionExtendedPayload {
 }
 
 export interface AuctionClosedPayload {
-  finalAmount: number;         // paise
+  auctionId: string;
   timestamp: string;
 }
 
@@ -506,6 +532,27 @@ export interface AuctionPausedPayload {
 export interface AuctionResumedPayload {
   auctionId: string;
   resumedAt: string;
+}
+
+export interface AuctionOpenedPayload {
+  auctionId: string;
+  startedAt: string;
+}
+
+export interface AuctionAwardedPayload {
+  auctionId: string;
+  winningVendorId: string;
+}
+
+export interface AuctionCancelledPayload {
+  auctionId: string;
+  reason?: string;
+  cancelledAt: string;
+}
+
+export interface ParticipantsChangedPayload {
+  auctionId: string;
+  vendorCount: number;
 }
 
 /** Client → Server */
