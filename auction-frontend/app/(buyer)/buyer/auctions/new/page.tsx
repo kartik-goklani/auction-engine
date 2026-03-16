@@ -4,13 +4,21 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auctionsApi, agentsApi } from '@/lib/api';
 import type { PriceIntelligenceSuggestion } from '@/lib/types';
-import { AuctionType, AuctionVisibility } from '@/lib/types';
+import { AuctionType, AuctionVisibility, ConfidenceLevel } from '@/lib/types';
+import { formatCurrency } from '@/lib/utils';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { PriceIntelligenceCard } from '@/components/agent/PriceIntelligenceCard';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
+
+const CONFIDENCE_BADGE_VARIANT: Record<ConfidenceLevel, 'success' | 'warning' | 'danger'> = {
+  [ConfidenceLevel.HIGH]:   'success',
+  [ConfidenceLevel.MEDIUM]: 'warning',
+  [ConfidenceLevel.LOW]:    'danger',
+};
 import Link from 'next/link';
 
 // ── Category options ────────────────────────────────────────────────────────
@@ -54,6 +62,12 @@ interface FormState {
   riskThresholdRupees: string;
   autoExtendTriggerMin: string;
   autoExtendMin: string;
+  // Reserve price
+  reservePriceEnabled: boolean;
+  reservePriceRupees: string;
+  // Reserve price
+  reservePriceEnabled: boolean;
+  reservePriceRupees:  string;
   // Traffic light
   trafficLightEnabled: boolean;
   trafficLightGreenPct: string;
@@ -70,6 +84,7 @@ const INITIAL: FormState = {
   startTime: '', endTime: '',
   ceilingPriceRupees: '', minDecrementRupees: '', riskThresholdRupees: '',
   autoExtendTriggerMin: '5', autoExtendMin: '5',
+  reservePriceEnabled: false, reservePriceRupees: '',
   trafficLightEnabled: false, trafficLightGreenPct: '5', trafficLightYellowPct: '15',
 };
 
@@ -149,9 +164,9 @@ export default function NewAuctionPage() {
     }
   }
 
-  function applyAiSuggestions(data: { ceilingPrice: number; minDecrement: number; riskThreshold?: number | null }) {
+  function applyAiSuggestions(data: { openingPrice: number; minDecrement: number; riskThreshold?: number | null }) {
     const nextState: Partial<FormState> = {
-      ceilingPriceRupees:  (data.ceilingPrice  / 100).toFixed(2),
+      ceilingPriceRupees:  (data.openingPrice / 100).toFixed(2),
       minDecrementRupees:  (data.minDecrement  / 100).toFixed(2),
       riskThresholdRupees: '',
     };
@@ -190,6 +205,24 @@ export default function NewAuctionPage() {
       setError('Please enter a unit.');
       return;
     }
+    if (form.reservePriceEnabled) {
+      const reserveVal = parseFloat(form.reservePriceRupees);
+      const ceilingVal = parseFloat(form.ceilingPriceRupees);
+      if (!form.reservePriceRupees || !Number.isFinite(reserveVal) || reserveVal <= 0) {
+        setError('Reserve price must be a positive number.');
+        return;
+      }
+      if (Number.isFinite(ceilingVal)) {
+        if (form.auctionType === AuctionType.FORWARD && reserveVal <= ceilingVal) {
+          setError('Reserve price must be above the floor price for a forward auction.');
+          return;
+        }
+        if (form.auctionType !== AuctionType.FORWARD && reserveVal >= ceilingVal) {
+          setError('Reserve price must be below the ceiling price for a reverse auction.');
+          return;
+        }
+      }
+    }
     if (form.trafficLightEnabled) {
       const gPct = Number(form.trafficLightGreenPct);
       const yPct = Number(form.trafficLightYellowPct);
@@ -222,8 +255,12 @@ export default function NewAuctionPage() {
         // Convert local datetime-local strings to UTC ISO strings (Bug 3 fix)
         startTime:         form.startTime ? localToIso(form.startTime) : form.startTime,
         endTime:           form.endTime   ? localToIso(form.endTime)   : form.endTime,
-        ceilingPrice:       rupeesToPaise(form.ceilingPriceRupees),
-        minDecrement:       rupeesToPaise(form.minDecrementRupees),
+        ceilingPrice:         rupeesToPaise(form.ceilingPriceRupees),
+        reservePrice:         form.reservePriceEnabled && form.reservePriceRupees
+                                ? rupeesToPaise(form.reservePriceRupees)
+                                : undefined,
+        reservePriceEnabled:  form.reservePriceEnabled || undefined,
+        minDecrement:         rupeesToPaise(form.minDecrementRupees),
         autoExtendTrigger: parseInt(form.autoExtendTriggerMin) || 5,
         autoExtendMinutes: parseInt(form.autoExtendMin)        || 5,
         trafficLightEnabled:   form.trafficLightEnabled || undefined,
@@ -406,16 +443,38 @@ export default function NewAuctionPage() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-text-primary">Pricing</h2>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              loading={aiLoading}
-              onClick={triggerPriceIntelligence}
-            >
-              <Sparkles size={13} />
-              {aiSuggestion ? 'Regenerate AI Suggestions' : 'AI Suggest'}
-            </Button>
+            {aiSuggestion && !aiLoading ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowAiModal(true)}
+                >
+                  <Sparkles size={13} />
+                  View AI Suggestions
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={triggerPriceIntelligence}
+                >
+                  Regenerate
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                loading={aiLoading}
+                onClick={triggerPriceIntelligence}
+              >
+                <Sparkles size={13} />
+                AI Suggest
+              </Button>
+            )}
           </div>
 
           <Card>
@@ -452,9 +511,94 @@ export default function NewAuctionPage() {
                   hint="Bids below this trigger anomaly detection"
                 />
               )}
+
             </div>
           </Card>
         </div>
+
+        {/* Reserve Price */}
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-text-primary">Reserve Price</h2>
+              <p className="text-xs text-text-muted mt-0.5">Minimum acceptable bid. Never shown to suppliers.</p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={form.reservePriceEnabled}
+                onChange={(e) => patch({ reservePriceEnabled: e.target.checked, reservePriceRupees: '' })}
+              />
+              <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-accent peer-focus:ring-2 peer-focus:ring-accent/30 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4" />
+            </label>
+          </div>
+
+          {form.reservePriceEnabled && (
+            <div className="mt-4 flex flex-col gap-2">
+              <Input
+                label={`Reserve Price (₹)`}
+                type="number"
+                min={0}
+                step={0.01}
+                value={form.reservePriceRupees}
+                onChange={(e) => patch({ reservePriceRupees: e.target.value })}
+                placeholder="0.00"
+                hint={
+                  form.auctionType === AuctionType.FORWARD
+                    ? 'Minimum price the buyer will accept — bids below this trigger reserve not met'
+                    : 'Maximum price the buyer will award at — bids above this trigger reserve not met'
+                }
+                required
+              />
+              {aiSuggestion?.suggested_reserve_price != null && aiSuggestion.reserve_confidence != null && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-muted">
+                    AI suggests: {formatCurrency(aiSuggestion.suggested_reserve_price)}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-xs text-accent hover:underline"
+                    onClick={() => patch({
+                      reservePriceEnabled: true,
+                      // Agent output is in paise; form stores rupees
+                      reservePriceRupees: (aiSuggestion.suggested_reserve_price! / 100).toFixed(2),
+                    })}
+                  >
+                    Use this
+                  </button>
+                </div>
+              )}
+              {aiSuggestion?.reserve_confidence === null &&
+                aiSuggestion?.reserve_price_basis === 'insufficient_evidence' && (
+                <p className="text-xs text-amber-600">
+                  Insufficient data to suggest a reserve price. Set manually.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Show AI reserve hint when toggle is off */}
+          {!form.reservePriceEnabled &&
+            aiSuggestion?.suggested_reserve_price != null &&
+            aiSuggestion.reserve_confidence != null && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-xs text-text-muted">
+                AI suggests a reserve price of {formatCurrency(aiSuggestion.suggested_reserve_price)}
+              </span>
+              <button
+                type="button"
+                className="text-xs text-accent hover:underline"
+                onClick={() => patch({
+                  reservePriceEnabled: true,
+                  reservePriceRupees: (aiSuggestion.suggested_reserve_price! / 100).toFixed(2),
+                })}
+              >
+                Use this
+              </button>
+            </div>
+          )}
+        </Card>
 
         {/* Traffic Light Config — not shown for SEALED_BID (signals are always DISABLED there) */}
         {form.auctionType !== AuctionType.SEALED_BID && (
@@ -564,31 +708,60 @@ export default function NewAuctionPage() {
         </div>
       </form>
 
-      {/* AI suggestions modal (Bug 2) */}
+      {/* AI suggestions modal */}
       <Modal
         open={showAiModal}
         onClose={() => setShowAiModal(false)}
         title="AI Price Suggestions"
-        size="md"
+        size="lg"
+        disableBackdropClose
       >
-        <div className="flex flex-col gap-4">
-          <p className="text-xs text-text-muted">
-            The Price Intelligence agent analysed current web pricing evidence and vendor-risk data for <strong>{resolveCategory(form)}</strong>.
-            Review the suggestions below. If the evidence is strong enough, you can apply the pricing values directly to the form.
-          </p>
-          <PriceIntelligenceCard
-            metadata={aiSuggestion}
-            auctionType={form.auctionType}
-            loading={false}
-            onApply={applyAiSuggestions}
-            onRegenerate={() => { setShowAiModal(false); void triggerPriceIntelligence(); }}
-            summary={aiSuggestion?.analysis_summary ?? null}
-          />
-          <div className="flex justify-end gap-3 pt-2 border-t border-border-subtle">
-            <Button variant="secondary" size="sm" onClick={() => setShowAiModal(false)}>
-              Dismiss
+        {/* Compact subheader: category · confidence badge · regenerate */}
+        <div className="-mt-2 mb-1 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-text-muted">{resolveCategory(form)}</span>
+          {aiSuggestion?.confidence_level && (
+            <Badge variant={CONFIDENCE_BADGE_VARIANT[aiSuggestion.confidence_level]} size="sm">
+              {aiSuggestion.confidence_level} Confidence
+            </Badge>
+          )}
+          <button
+            type="button"
+            title="Regenerate suggestions"
+            onClick={() => { setShowAiModal(false); void triggerPriceIntelligence(); }}
+            className="ml-auto text-text-muted hover:text-text-secondary transition-colors"
+          >
+            <RefreshCw size={13} />
+          </button>
+        </div>
+
+        {/* Flat card — modal is the visual container */}
+        <PriceIntelligenceCard
+          metadata={aiSuggestion}
+          auctionType={form.auctionType}
+          loading={false}
+          onApply={applyAiSuggestions}
+          summary={aiSuggestion?.analysis_summary ?? null}
+          flat
+        />
+
+        {/* Unified footer */}
+        <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-3">
+          <Button variant="secondary" size="sm" onClick={() => setShowAiModal(false)}>
+            Dismiss
+          </Button>
+          {aiSuggestion?.opening_price != null && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => applyAiSuggestions({
+                openingPrice: aiSuggestion.opening_price ?? 0,
+                minDecrement: aiSuggestion.suggested_decrement ?? 0,
+                riskThreshold: aiSuggestion.risk_threshold,
+              })}
+            >
+              Apply Suggestions
             </Button>
-          </div>
+          )}
         </div>
       </Modal>
     </div>
