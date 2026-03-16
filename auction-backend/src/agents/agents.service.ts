@@ -9,25 +9,25 @@ import { DatabaseService } from '../common/database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { AgentType, AgentRunStatus, AlertType, NotificationType } from '../common/types';
+import { AgentType, AgentRunStatus, AuctionType, NotificationType } from '../common/types';
 import {
   runPriceIntelligenceAgent,
   type PriceIntelligenceOutput,
 } from './price-intelligence/price-intelligence.agent';
 import { runVendorShortlistAgent, type VendorShortlistOutput } from './vendor-shortlist/vendor-shortlist.agent';
-import { runAnomalyDetectionAgent } from './anomaly-detection/anomaly-detection.agent';
+import { runAnomalyDetectionAgent, type AnomalyAgentInput } from './anomaly-detection/anomaly-detection.agent';
 import { runAwardRecommendationAgent } from './award-recommendation/award-recommendation.agent';
-import {
-  getCanonicalRiskThresholdContext,
-  isMinorUnitAmount,
-  shouldRaiseBelowRiskAlert,
-} from './anomaly-detection/anomaly-detection.helpers';
+import { type AnomalyFlag } from './anomaly-detection/anomaly-window.service';
 import type { AnalyzePriceIntelligenceDto } from './dto/analyze-price-intelligence.dto';
 
 export interface PriceIntelligenceAnalysisResponse {
   agent_run_id: string | null;
   analysis_summary: string;
-  ceiling_price: number | null;
+  opening_price:            number | null;
+  opening_price_type:       'CEILING' | 'FLOOR';
+  suggested_reserve_price:  number | null;
+  reserve_price_basis:      'benchmark_plus_5pct' | 'benchmark_minus_5pct' | 'insufficient_evidence';
+  reserve_confidence:       'HIGH' | 'MEDIUM' | null;
   suggested_decrement: number | null;
   risk_threshold: number | null;
   risk_note: string | null;
@@ -131,16 +131,20 @@ export class AgentsService {
     }
 
     return {
-      agent_run_id: result.agentRunId,
-      analysis_summary: result.output.analysis_summary,
-      ceiling_price: result.output.ceiling_price,
-      suggested_decrement: result.output.suggested_decrement,
-      risk_threshold: result.output.risk_threshold,
-      risk_note: result.output.risk_note,
-      confidence_level: result.output.confidence_level,
-      evidence_sources: result.output.evidence_sources,
-      market_context: result.output.market_context,
-      evidence_breakdown: result.output.evidence_breakdown,
+      agent_run_id:            result.agentRunId,
+      analysis_summary:        result.output.analysis_summary,
+      opening_price:           result.output.opening_price,
+      opening_price_type:      result.output.opening_price_type,
+      suggested_reserve_price: result.output.suggested_reserve_price,
+      reserve_price_basis:     result.output.reserve_price_basis,
+      reserve_confidence:      result.output.reserve_confidence,
+      suggested_decrement:     result.output.suggested_decrement,
+      risk_threshold:          result.output.risk_threshold,
+      risk_note:               result.output.risk_note,
+      confidence_level:        result.output.confidence_level,
+      evidence_sources:        result.output.evidence_sources,
+      market_context:          result.output.market_context,
+      evidence_breakdown:      result.output.evidence_breakdown,
       ...(result.output.failure_reason
         ? { failure_reason: result.output.failure_reason }
         : {}),
@@ -198,153 +202,157 @@ export class AgentsService {
   // ── Agent 3: Anomaly Detection ────────────────────────────────────────────
 
   /**
-   * Non-blocking — called by BidsService.acceptBid() after each accepted bid.
-   * Writes alerts to auction_alerts and broadcasts to buyer room if detected.
+   * Non-blocking — called by BidsService after Tier 1 push + gate pass.
+   * Receives pre-computed flags from the caller; skips Tier 2 gate here.
+   * Tier 1 (AnomalyWindowService.push) must run structurally synchronously in
+   * postAcceptancePipeline before this fire-and-forget call.
    */
-  runAnomalyDetection(auctionId: string, latestBidAmount: number): void {
+  runAnomalyDetection(
+    auctionId: string,
+    bid: { bidId: string; vendorId: string; amount: number; placedAt: Date },
+    flags: AnomalyFlag[],
+  ): void {
     // intentional fire-and-forget: anomaly detection must not block bid confirmation
-    void this.executeAnomalyDetection(auctionId, latestBidAmount).catch(() => undefined);
+    void this.executeAnomalyDetection(auctionId, bid, flags).catch(() => undefined);
   }
 
-  private async executeAnomalyDetection(auctionId: string, latestBidAmount: number): Promise<void> {
+  private async executeAnomalyDetection(
+    auctionId: string,
+    bid: { bidId: string; vendorId: string; amount: number; placedAt: Date },
+    flags: AnomalyFlag[],
+  ): Promise<void> {
     const startedAt = Date.now();
     let agentRunId: string | null = null;
 
     try {
-      if (!isMinorUnitAmount(latestBidAmount)) {
-        this.logger.warn(
-          `Anomaly Detection skipped auctionId=${auctionId} latestBidAmount=${String(latestBidAmount)} reason=invalid_minor_unit_amount`,
-          this.CONTEXT,
-        );
-        return;
-      }
-
-      const runRow = await this.insertAgentRun(auctionId, AgentType.ANOMALY_DETECTION);
-      agentRunId = runRow.id as string;
-      const thresholdContext = await getCanonicalRiskThresholdContext(this.db.getClient(), auctionId);
-
-      this.logger.log(`Anomaly Detection agent started auctionId=${auctionId} runId=${agentRunId}`, this.CONTEXT);
-      this.logger.debug(
-        `Anomaly threshold context auctionId=${auctionId} runId=${agentRunId} latestBidAmount=${latestBidAmount} auctionType=${thresholdContext.auctionType ?? 'UNKNOWN'} riskThreshold=${thresholdContext.riskThreshold ?? 'null'} metadataRunId=${thresholdContext.metadataAgentRunId ?? 'null'} metadataCreatedAt=${thresholdContext.metadataCreatedAt ?? 'null'} reason=${thresholdContext.reason ?? 'ok'}`,
+      this.logger.log(
+        `Anomaly Detection Tier 1 flagged auctionId=${auctionId} bidId=${bid.bidId} flags=${flags.map((f) => f.type).join(',')}`,
         this.CONTEXT,
       );
 
-      const result = await runAnomalyDetectionAgent(
-        this.db.getClient(),
+      // ── Step 1: Fetch auction context for agent ───────────────────────────
+      const { data: auctionRow } = await this.db
+        .getClient()
+        .from('auctions')
+        .select('type, buyer_id, start_time')
+        .eq('id', auctionId)
+        .single();
+
+      const auctionType  = (auctionRow as { type: string; buyer_id: string; start_time: string | null } | null)?.type ?? 'REVERSE';
+      const buyerId      = (auctionRow as { type: string; buyer_id: string; start_time: string | null } | null)?.buyer_id ?? null;
+      const startTime    = (auctionRow as { type: string; buyer_id: string; start_time: string | null } | null)?.start_time;
+      const elapsedMinutes = startTime
+        ? Math.floor((Date.now() - new Date(startTime).getTime()) / 60_000)
+        : 0;
+
+      const { count: vendorCount } = await this.db
+        .getClient()
+        .from('vendor_invitations')
+        .select('id', { count: 'exact', head: true })
+        .eq('auction_id', auctionId)
+        .eq('status', 'ACCEPTED');
+
+      // Current best price: MIN for REVERSE, MAX for FORWARD/SEALED_BID
+      const isReverse = auctionType === AuctionType.REVERSE;
+      const { data: bestBidRow } = await this.db
+        .getClient()
+        .from('bids')
+        .select('amount')
+        .eq('auction_id', auctionId)
+        .eq('status', 'ACCEPTED')
+        .order('amount', { ascending: isReverse })
+        .limit(1)
+        .maybeSingle();
+
+      const currentBestPrice = (bestBidRow as { amount: number } | null)?.amount ?? bid.amount;
+
+      // ── Step 2: Create agent_runs row ─────────────────────────────────────
+      const runRow = await this.insertAgentRun(auctionId, AgentType.ANOMALY_DETECTION, bid.bidId);
+      agentRunId = runRow.id as string;
+
+      this.logger.log(`Anomaly Detection agent (Tier 2) started auctionId=${auctionId} runId=${agentRunId}`, this.CONTEXT);
+
+      // ── Step 3: Run Tier 2 agent ──────────────────────────────────────────
+      const agentInput: AnomalyAgentInput = {
         auctionId,
         agentRunId,
-        latestBidAmount,
-      );
+        triggeringBid: {
+          bidId:    bid.bidId,
+          vendorId: bid.vendorId,
+          amount:   bid.amount,
+          placedAt: bid.placedAt.toISOString(),
+        },
+        flags,
+        auctionContext: {
+          type:             auctionType,
+          currentBestPrice,
+          vendorCount:      vendorCount ?? 0,
+          elapsedMinutes,
+        },
+      };
 
-      let hasValidAlerts = false;
-      if (result.anomalyDetected) {
-        const { data: auction } = await this.db
-          .getClient()
-          .from('auctions')
-          .select('buyer_id')
-          .eq('id', auctionId)
-          .single();
+      const result = await runAnomalyDetectionAgent(this.db.getClient(), agentInput);
 
-        const buyerId = (auction as { buyer_id: string } | null)?.buyer_id ?? null;
+      // ── Step 4: Fetch alerts created by raise_alert during this run ───────
+      const { data: alerts } = await this.db
+        .getClient()
+        .from('auction_alerts')
+        .select('id, alert_type, severity, description, vendor_ids_involved')
+        .eq('auction_id', auctionId)
+        .eq('agent_run_id', agentRunId);
 
-        // Broadcast alert to the buyer's monitoring room
-        const { data: alerts } = await this.db
-          .getClient()
-          .from('auction_alerts')
-          .select('id, alert_type, severity, description')
-          .eq('auction_id', auctionId)
-          .eq('agent_run_id', agentRunId);
+      type AlertRow = {
+        id: string;
+        alert_type: string;
+        severity: string;
+        description: string;
+        vendor_ids_involved: string[];
+      };
+      const confirmedAlerts = (alerts ?? []) as AlertRow[];
 
-        const invalidBelowRiskAlertIds: string[] = [];
+      // ── Step 5: Emit socket + create notification for each alert ──────────
+      for (const alert of confirmedAlerts) {
+        this.realtimeService.emitToAuction(auctionId, 'alert_raised', {
+          alertId:           alert.id,
+          alertType:         alert.alert_type,
+          severity:          alert.severity,
+          description:       alert.description,
+          vendorIdsInvolved: alert.vendor_ids_involved,
+          createdAt:         new Date().toISOString(),
+        });
 
-        for (const alert of alerts ?? []) {
-          const a = alert as {
-            id: string;
-            alert_type: string;
-            severity: string;
-            description: string;
-          };
-
-          if (
-            a.alert_type === AlertType.BELOW_RISK_BID &&
-            !shouldRaiseBelowRiskAlert(
-              thresholdContext.auctionType,
-              latestBidAmount,
-              thresholdContext.riskThreshold,
-            )
-          ) {
-            invalidBelowRiskAlertIds.push(a.id);
-            continue;
-          }
-
-          hasValidAlerts = true;
-          this.realtimeService.emitToAuction(auctionId, 'alert_raised', {
-            alertType: a.alert_type,
-            severity: a.severity,
-            description: a.description,
-          });
-
-          if (buyerId) {
-            const title = a.alert_type === 'COLLUSION_SIGNAL'
-              ? 'Collusion alert'
-              : 'Below-risk bid alert';
-            const notificationMetadata: Record<string, unknown> = {
-              auctionId,
-              severity: a.severity,
-              agentRunId,
-            };
-
-            if (a.alert_type === AlertType.BELOW_RISK_BID) {
-              notificationMetadata.latestBidAmount = latestBidAmount;
-              notificationMetadata.riskThreshold = thresholdContext.riskThreshold;
-            }
-
-            this.notificationsService.send(
-              buyerId,
-              NotificationType.ANOMALY_ALERT,
-              title,
-              a.description,
-              notificationMetadata,
-            );
-          }
-        }
-
-        if (invalidBelowRiskAlertIds.length > 0) {
-          const { error } = await this.db
-            .getClient()
-            .from('auction_alerts')
-            .delete()
-            .in('id', invalidBelowRiskAlertIds);
-
-          if (error) {
-            this.logger.warn(
-              `Failed to delete invalid below-risk alerts auctionId=${auctionId} runId=${agentRunId} count=${invalidBelowRiskAlertIds.length}`,
-              this.CONTEXT,
-            );
-          } else {
-            this.logger.warn(
-              `Suppressed invalid below-risk alerts auctionId=${auctionId} runId=${agentRunId} count=${invalidBelowRiskAlertIds.length} latestBidAmount=${latestBidAmount} riskThreshold=${thresholdContext.riskThreshold ?? 'null'}`,
-              this.CONTEXT,
-            );
-          }
+        if (buyerId) {
+          this.notificationsService.send(
+            buyerId,
+            NotificationType.ANOMALY_ALERT,
+            `Anomaly detected: ${alert.alert_type}`,
+            alert.description,
+            { auctionId, alertId: alert.id, agentRunId },
+          );
         }
       }
 
-      const durationMs = Date.now() - startedAt;
+      // ── Step 6: Update agent_runs to SUCCESS ──────────────────────────────
+      const durationMs   = Date.now() - startedAt;
+      const alertCount   = confirmedAlerts.length;
+      const anomalyDetected = alertCount > 0;
       const status = result.error ? AgentRunStatus.FAILED : AgentRunStatus.SUCCESS;
+
       await this.completeAgentRun(agentRunId, {
-        toolCalls: result.toolCalls,
-        finalOutput: { anomaly_detected: hasValidAlerts },
-        tokensUsed: result.tokensUsed,
+        toolCalls:   result.toolCalls,
+        finalOutput: { anomaly_detected: anomalyDetected, alert_count: alertCount },
+        tokensUsed:  result.tokensUsed,
         durationMs,
         status,
       });
+
+      // ── Step 7: Emit agent_run_completed ──────────────────────────────────
       this.realtimeService.emitAgentRunCompleted(auctionId, AgentType.ANOMALY_DETECTION, agentRunId);
 
       if (status === AgentRunStatus.FAILED) {
-        this.logger.warn(`Anomaly Detection agent failed auctionId=${auctionId} runId=${agentRunId} error=${result.error}`, this.CONTEXT);
+        this.logger.warn(`Anomaly Detection agent failed auctionId=${auctionId} runId=${agentRunId} error=${result.error ?? 'unknown'}`, this.CONTEXT);
       } else {
-        this.logger.log(`Anomaly Detection agent completed auctionId=${auctionId} runId=${agentRunId} anomaly=${hasValidAlerts} durationMs=${durationMs} tokens=${result.tokensUsed}`, this.CONTEXT);
+        this.logger.log(`Anomaly Detection agent completed auctionId=${auctionId} runId=${agentRunId} anomaly=${anomalyDetected} alerts=${alertCount} durationMs=${durationMs} tokens=${result.tokensUsed}`, this.CONTEXT);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -459,14 +467,16 @@ export class AgentsService {
   private async insertAgentRun(
     auctionId: string | null,
     agentType: AgentType,
+    triggeringBidId?: string,
   ): Promise<{ id: unknown }> {
     const { data, error } = await this.db
       .getClient()
       .from('agent_runs')
       .insert({
-        auction_id: auctionId,
-        agent_type: agentType,
-        status: AgentRunStatus.RUNNING,
+        auction_id:         auctionId,
+        agent_type:         agentType,
+        status:             AgentRunStatus.RUNNING,
+        ...(triggeringBidId ? { triggering_bid_id: triggeringBidId } : {}),
       })
       .select('id')
       .single();
@@ -589,13 +599,17 @@ export class AgentsService {
     output: PriceIntelligenceOutput,
   ): Promise<void> {
     const { error } = await this.db.getClient().from('auction_ai_metadata').insert({
-      auction_id: auctionId,
-      ceiling_price: output.ceiling_price,
-      suggested_decrement: output.suggested_decrement,
-      risk_threshold: output.risk_threshold,
-      risk_note: output.risk_note,
-      confidence_level: output.confidence_level,
-      agent_run_id: agentRunId,
+      auction_id:              auctionId,
+      opening_price:           output.opening_price,
+      opening_price_type:      output.opening_price_type,
+      suggested_reserve_price: output.suggested_reserve_price,
+      reserve_price_basis:     output.reserve_price_basis,
+      reserve_confidence:      output.reserve_confidence,
+      suggested_decrement:     output.suggested_decrement,
+      risk_threshold:          output.risk_threshold,
+      risk_note:               output.risk_note,
+      confidence_level:        output.confidence_level,
+      agent_run_id:            agentRunId,
     });
 
     if (error) {
