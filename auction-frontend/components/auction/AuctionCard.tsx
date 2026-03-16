@@ -12,13 +12,14 @@ interface AuctionCardProps {
 }
 
 const STATUS_BORDER: Record<AuctionStatus, string> = {
-  [AuctionStatus.DRAFT]:     'border-l-border-default',
-  [AuctionStatus.PUBLISHED]: 'border-l-warning',
-  [AuctionStatus.OPEN]:      'border-l-success',
-  [AuctionStatus.PAUSED]:    'border-l-warning',
-  [AuctionStatus.CLOSED]:    'border-l-text-muted',
-  [AuctionStatus.AWARDED]:   'border-l-accent',
-  [AuctionStatus.CANCELLED]: 'border-l-danger',
+  [AuctionStatus.DRAFT]:           'border-l-border-default',
+  [AuctionStatus.PUBLISHED]:       'border-l-warning',
+  [AuctionStatus.OPEN]:            'border-l-success',
+  [AuctionStatus.PAUSED]:          'border-l-warning',
+  [AuctionStatus.RESERVE_NOT_MET]: 'border-l-danger',
+  [AuctionStatus.CLOSED]:          'border-l-text-muted',
+  [AuctionStatus.AWARDED]:         'border-l-accent',
+  [AuctionStatus.CANCELLED]:       'border-l-danger',
 };
 
 export function AuctionCard({ auction, onClick }: AuctionCardProps) {

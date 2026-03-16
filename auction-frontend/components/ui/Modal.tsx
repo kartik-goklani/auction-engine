@@ -12,6 +12,7 @@ interface ModalProps {
   description?: string;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  disableBackdropClose?: boolean;
 }
 
 const sizeClasses = {
@@ -27,6 +28,7 @@ export function Modal({
   description,
   children,
   size = 'md',
+  disableBackdropClose = false,
 }: ModalProps) {
   // Close on Escape
   useEffect(() => {
@@ -49,7 +51,7 @@ export function Modal({
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-[rgba(0,0,0,0.65)]"
-        onClick={onClose}
+        onClick={disableBackdropClose ? undefined : onClose}
       />
 
       {/* Panel */}
