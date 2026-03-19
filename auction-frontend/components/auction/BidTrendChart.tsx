@@ -231,6 +231,7 @@ export function BidTrendChart({
 
   // Reset legend filter when the active tab changes — every tab starts clean
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHiddenVendors(new Set());
   }, [tab]);
 
@@ -392,7 +393,7 @@ export function BidTrendChart({
               <Tooltip content={<CurrencyTooltip />} />
               <ReferenceLine y={marketBenchmark.recommendedUnitPrice} stroke="#6366f1" strokeDasharray="4 2" label={{ value: 'AI Benchmark', fill: '#6366f1', fontSize: 10 }} />
               <ReferenceLine y={ceilingPrice}                         stroke="#ef4444" strokeDasharray="4 2" label={{ value: 'Ceiling',       fill: '#ef4444', fontSize: 10 }} />
-              <Line type="monotone" dataKey="Market Best" stroke="#a855f7" strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} connectNulls />
+              <Line type="monotone" dataKey="Market Best" stroke="#3b82f6" strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} connectNulls />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -435,7 +436,7 @@ export function BidTrendChart({
               {/* Final bid — colored per vendor using Cell overrides */}
               <Bar dataKey="lastBid" name="Final Bid" maxBarSize={24}>
                 {bidImprovementData.map(({ vendor }) => (
-                  <Cell key={vendor} fill={vendorColors[vendor] ?? '#a855f7'} />
+                  <Cell key={vendor} fill={vendorColors[vendor] ?? '#3b82f6'} />
                 ))}
               </Bar>
             </BarChart>
@@ -486,7 +487,7 @@ export function BidTrendChart({
                 }}
               />
               {bidCountVsPriceDropData.map((entry) => {
-                const color  = vendorColors[entry.vendor] ?? '#a855f7';
+                const color  = vendorColors[entry.vendor] ?? '#3b82f6';
                 const letter = entry.vendor.replace('Bidder ', '');
                 return (
                   <Scatter
@@ -701,7 +702,7 @@ export function BidTrendChart({
             <span className="text-[10px] text-text-muted">First Bid</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#a855f7]" />
+            <span className="h-2.5 w-2.5 rounded-sm bg-[#3b82f6]" />
             <span className="text-[10px] text-text-muted">Final Bid</span>
           </div>
         </div>

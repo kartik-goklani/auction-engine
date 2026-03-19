@@ -46,7 +46,7 @@ export default function VendorsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search vendors…"
-          className="w-full bg-bg-input text-text-primary text-sm pl-9 pr-4 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+          className="w-full bg-bg-input text-text-primary text-sm pl-9 pr-4 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
         />
       </div>
 

@@ -55,10 +55,8 @@ export default function VendorResultsPage() {
     <div className="flex flex-col gap-6 max-w-xl">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href={`/vendor/auctions/${id}`}>
-          <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-            <ArrowLeft size={16} />
-          </button>
+        <Link href={`/vendor/auctions/${id}`} className="inline-flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+          <ArrowLeft size={16} />
         </Link>
         <div>
           <div className="flex items-center gap-2 flex-wrap">

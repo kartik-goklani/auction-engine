@@ -113,10 +113,8 @@ export default function AuctionResultsPage() {
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href={`/buyer/auctions/${id}`}>
-          <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-            <ArrowLeft size={16} />
-          </button>
+        <Link href={`/buyer/auctions/${id}`} className="inline-flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+          <ArrowLeft size={16} />
         </Link>
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -142,7 +140,7 @@ export default function AuctionResultsPage() {
           </p>
           <div className="flex gap-3">
             <Button
-              variant="danger"
+              variant="destructive"
               size="sm"
               onClick={async () => {
                 await auctionsApi.forceClose(id);

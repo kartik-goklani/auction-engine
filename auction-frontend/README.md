@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# auction-frontend
+
+Next.js 14 frontend for the Auction Engine — buyer portal and vendor portal in one codebase.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Description |
+|---|---|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build |
+| `npm run lint` | ESLint (zero warnings enforced) |
+| `npm run check:ui-guardrails` | Check for UI consistency violations (see below) |
+
+---
+
+## UI Consistency Checks
+
+Run before every PR:
+
+```bash
+npm run check:ui-guardrails
+```
+
+This script enforces the rules in [`docs/ui-guardrails.md`](docs/ui-guardrails.md). It will
+fail with exit code 1 if any of the following are detected:
+
+- **`variant="primary"`** anywhere in app/component code — use `"default"` instead
+- **`<Button variant="danger">`** — use `"destructive"` for buttons; `"danger"` is Badge-only
+- **`from '@/components/ui/Input'` in feature code** — use `FormInput` or a shadcn form widget
+- **`from '@/components/ui/dialog'` in feature code** — use `<Modal>` which wraps the dialog primitive
+- **Stale purple `rgba()` values** — `rgba(168,85,247,*)` or `rgba(124,92,252,*)` from the old design system
+- **`<button>` nested inside `<Link>`** — style the `<Link>` directly instead
+- **Hardcoded hex in `className` strings** — use design-system tokens (`bg-bg-card`, `text-text-primary`, etc.)
+
+Full rules, checklists, and forbidden patterns: [`docs/ui-guardrails.md`](docs/ui-guardrails.md)
+
+---
+
+## Stack
+
+- **Framework:** Next.js 14, App Router, TypeScript strict mode
+- **Styling:** TailwindCSS v4, shadcn base-nova (`@base-ui/react` primitives)
+- **Auth:** Supabase Auth (data fetching via `auction-backend` only — never Supabase direct)
+- **Real-time:** Socket.IO client singleton (`lib/socket.ts`)
+- **AI:** Four LangGraph agents surfaced through buyer portal
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Project architecture](/ARCHITECTURE.md)
+- [UI Guardrails](docs/ui-guardrails.md)

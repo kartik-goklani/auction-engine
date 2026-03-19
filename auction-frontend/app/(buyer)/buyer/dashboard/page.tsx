@@ -61,7 +61,7 @@ export default function BuyerDashboardPage() {
         ].map(({ label, value, color }) => (
           <div
             key={label}
-            className="rounded-[20px] bg-bg-card border border-border-subtle p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:shadow-[0_0_20px_rgba(168,85,247,0.10)] hover:-translate-y-0.5 transition-all duration-200"
+            className="rounded-[20px] bg-bg-card border border-border-subtle p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:shadow-[0_0_20px_rgba(59,130,246,0.10)] hover:-translate-y-0.5 transition-all duration-200"
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{label}</p>
             <p className={`mt-2 font-mono text-3xl font-bold leading-none ${color}`}>{value}</p>

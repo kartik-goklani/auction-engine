@@ -6,11 +6,14 @@ import { auctionsApi, agentsApi } from '@/lib/api';
 import type { PriceIntelligenceSuggestion } from '@/lib/types';
 import { AuctionType, AuctionVisibility, ConfidenceLevel } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Input } from '@/components/ui/Input';
+import { FormInput } from '@/components/ui/FormInput';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { PriceIntelligenceCard } from '@/components/agent/PriceIntelligenceCard';
 import { ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
 
@@ -65,9 +68,6 @@ interface FormState {
   // Reserve price
   reservePriceEnabled: boolean;
   reservePriceRupees: string;
-  // Reserve price
-  reservePriceEnabled: boolean;
-  reservePriceRupees:  string;
   // Traffic light
   trafficLightEnabled: boolean;
   trafficLightGreenPct: string;
@@ -275,16 +275,12 @@ export default function NewAuctionPage() {
     }
   }
 
-  const SELECT_CLS = 'w-full bg-bg-input text-text-primary text-sm px-4 py-2.5 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 transition-all duration-200';
-
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/buyer/auctions">
-          <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-            <ArrowLeft size={16} />
-          </button>
+        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+          <ArrowLeft size={16} />
         </Link>
         <div>
           <h1 className="text-xl font-bold text-text-primary">New Auction</h1>
@@ -297,80 +293,76 @@ export default function NewAuctionPage() {
         <Card>
           <h2 className="text-sm font-semibold text-text-primary mb-4">Basic Details</h2>
           <div className="flex flex-col gap-4">
-            <Input
+            <FormInput
               label="Title"
               value={form.title}
               onChange={(e) => patch({ title: e.target.value })}
               placeholder="e.g. Office Supplies Q3 2026"
               required
             />
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Description</label>
-              <textarea
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Description</label>
+              <Textarea
                 value={form.description}
                 onChange={(e) => patch({ description: e.target.value })}
                 placeholder="What are you procuring?"
                 rows={3}
-                className="w-full bg-bg-input text-text-primary text-sm px-4 py-2.5 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 transition-all duration-200 resize-none placeholder:text-text-muted"
               />
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Input
+              <FormInput
                 label="Brand"
                 value={form.brandName}
                 onChange={(e) => patch({ brandName: e.target.value })}
                 placeholder="e.g. Apple"
               />
-              <Input
+              <FormInput
                 label="Model"
                 value={form.modelNumber}
                 onChange={(e) => patch({ modelNumber: e.target.value })}
                 placeholder="e.g. Mac mini M4"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">
-                Key Specs
-              </label>
-              <textarea
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Key Specs</label>
+              <Textarea
                 value={form.keySpecs}
                 onChange={(e) => patch({ keySpecs: e.target.value })}
                 placeholder="e.g. 16GB RAM, 256GB SSD"
                 rows={2}
-                className="w-full bg-bg-input text-text-primary text-sm px-4 py-2.5 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 transition-all duration-200 resize-none placeholder:text-text-muted"
               />
             </div>
 
-            {/* Category dropdown (Bug 1) */}
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">
+            {/* Category dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">
                 Category
-                <span className="text-text-muted font-normal ml-1">— used by AI for price suggestions</span>
+                <span className="text-muted-foreground font-normal ml-1">— used by AI for price suggestions</span>
               </label>
-              <select
+              <Select
                 value={form.categoryKey}
-                onChange={(e) => patch({ categoryKey: e.target.value, categoryCustom: '' })}
-                className={SELECT_CLS}
-                required
+                onValueChange={(v) => { if (v) patch({ categoryKey: v, categoryCustom: '' }); }}
               >
-                <option value="" disabled>Select a category…</option>
-                {CATEGORY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-                <option value={OTHER_VALUE}>Other…</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a category…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                  <SelectItem value={OTHER_VALUE}>Other…</SelectItem>
+                </SelectContent>
+              </Select>
               {form.categoryKey === OTHER_VALUE && (
-                <input
-                  type="text"
+                <FormInput
                   value={form.categoryCustom}
                   onChange={(e) => patch({ categoryCustom: e.target.value })}
                   placeholder="Enter custom category (optional)"
-                  className="mt-2 w-full bg-bg-input text-text-primary text-sm px-4 py-2.5 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 transition-all duration-200 placeholder:text-text-muted"
                 />
               )}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Input
+              <FormInput
                 label="Quantity"
                 type="number"
                 min={0}
@@ -380,7 +372,7 @@ export default function NewAuctionPage() {
                 placeholder="e.g. 50"
                 required
               />
-              <Input
+              <FormInput
                 label="Unit"
                 value={form.unit}
                 onChange={(e) => patch({ unit: e.target.value })}
@@ -395,41 +387,46 @@ export default function NewAuctionPage() {
         <Card>
           <h2 className="text-sm font-semibold text-text-primary mb-4">Auction Configuration</h2>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Auction Type</label>
-              <select
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Auction Type</label>
+              <Select
                 value={form.auctionType}
-                onChange={(e) => patch({
-                  auctionType: e.target.value as AuctionType,
-                  ...(e.target.value === AuctionType.FORWARD ? { riskThresholdRupees: '' } : {}),
-                })}
-                className={SELECT_CLS}
+                onValueChange={(v) => { if (v) patch({ auctionType: v as AuctionType, ...(v === AuctionType.FORWARD ? { riskThresholdRupees: '' } : {}) }); }}
               >
-                <option value={AuctionType.REVERSE}>Reverse (Price Down)</option>
-                <option value={AuctionType.FORWARD}>Forward (Price Up)</option>
-                <option value={AuctionType.SEALED_BID}>Sealed Bid</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AuctionType.REVERSE}>Reverse (Price Down)</SelectItem>
+                  <SelectItem value={AuctionType.FORWARD}>Forward (Price Up)</SelectItem>
+                  <SelectItem value={AuctionType.SEALED_BID}>Sealed Bid</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Visibility</label>
-              <select
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Visibility</label>
+              <Select
                 value={form.visibility}
-                onChange={(e) => patch({ visibility: e.target.value as AuctionVisibility })}
-                className={SELECT_CLS}
+                onValueChange={(v) => { if (v) patch({ visibility: v as AuctionVisibility }); }}
               >
-                <option value={AuctionVisibility.BLIND}>Blind (no info shown)</option>
-                <option value={AuctionVisibility.RANK}>Rank Only</option>
-                <option value={AuctionVisibility.PRICE}>Price Visible</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AuctionVisibility.BLIND}>Blind (no info shown)</SelectItem>
+                  <SelectItem value={AuctionVisibility.RANK}>Rank Only</SelectItem>
+                  <SelectItem value={AuctionVisibility.PRICE}>Price Visible</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Input
+            <FormInput
               label="Start Time"
               type="datetime-local"
               value={form.startTime}
               onChange={(e) => patch({ startTime: e.target.value })}
               required
             />
-            <Input
+            <FormInput
               label="End Time"
               type="datetime-local"
               value={form.endTime}
@@ -479,7 +476,7 @@ export default function NewAuctionPage() {
 
           <Card>
             <div className="grid grid-cols-2 gap-4">
-              <Input
+              <FormInput
                 label={form.auctionType === AuctionType.FORWARD ? 'Floor Price (₹)' : 'Ceiling Price (₹)'}
                 type="number"
                 min={0}
@@ -489,7 +486,7 @@ export default function NewAuctionPage() {
                 placeholder="0.00"
                 required
               />
-              <Input
+              <FormInput
                 label={form.auctionType === AuctionType.FORWARD ? 'Min Increment (₹)' : 'Min Decrement (₹)'}
                 type="number"
                 min={0}
@@ -500,7 +497,7 @@ export default function NewAuctionPage() {
                 required
               />
               {form.auctionType !== AuctionType.FORWARD && (
-                <Input
+                <FormInput
                   label="Risk Threshold (₹)"
                   type="number"
                   min={0}
@@ -523,20 +520,15 @@ export default function NewAuctionPage() {
               <h2 className="text-sm font-semibold text-text-primary">Reserve Price</h2>
               <p className="text-xs text-text-muted mt-0.5">Minimum acceptable bid. Never shown to suppliers.</p>
             </div>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={form.reservePriceEnabled}
-                onChange={(e) => patch({ reservePriceEnabled: e.target.checked, reservePriceRupees: '' })}
-              />
-              <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-accent peer-focus:ring-2 peer-focus:ring-accent/30 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4" />
-            </label>
+            <Switch
+              checked={form.reservePriceEnabled}
+              onCheckedChange={(checked) => patch({ reservePriceEnabled: checked, reservePriceRupees: '' })}
+            />
           </div>
 
           {form.reservePriceEnabled && (
             <div className="mt-4 flex flex-col gap-2">
-              <Input
+              <FormInput
                 label={`Reserve Price (₹)`}
                 type="number"
                 min={0}
@@ -610,21 +602,16 @@ export default function NewAuctionPage() {
                   Show suppliers a colour signal after each bid — without revealing the actual price
                 </p>
               </div>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={form.trafficLightEnabled}
-                  onChange={(e) => patch({ trafficLightEnabled: e.target.checked })}
-                />
-                <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-accent peer-focus:ring-2 peer-focus:ring-accent/30 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4" />
-              </label>
+              <Switch
+                checked={form.trafficLightEnabled}
+                onCheckedChange={(checked) => patch({ trafficLightEnabled: checked })}
+              />
             </div>
 
             {form.trafficLightEnabled && (
               <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <Input
+                  <FormInput
                     label="Green threshold (%)"
                     type="number"
                     min={1}
@@ -634,7 +621,7 @@ export default function NewAuctionPage() {
                     onChange={(e) => patch({ trafficLightGreenPct: e.target.value })}
                     hint="Vendor is within this % of best price"
                   />
-                  <Input
+                  <FormInput
                     label="Yellow threshold (%)"
                     type="number"
                     min={2}
@@ -673,7 +660,7 @@ export default function NewAuctionPage() {
         <Card>
           <h2 className="text-sm font-semibold text-text-primary mb-4">Auto-Extension</h2>
           <div className="grid grid-cols-2 gap-4">
-            <Input
+            <FormInput
               label="Trigger Window (min)"
               type="number"
               min={1}
@@ -681,7 +668,7 @@ export default function NewAuctionPage() {
               onChange={(e) => patch({ autoExtendTriggerMin: e.target.value })}
               hint="Extend if bid arrives within N min of end"
             />
-            <Input
+            <FormInput
               label="Extension Duration (min)"
               type="number"
               min={1}
@@ -702,7 +689,7 @@ export default function NewAuctionPage() {
           <Link href="/buyer/auctions">
             <Button type="button" variant="secondary" size="md">Cancel</Button>
           </Link>
-          <Button type="submit" variant="primary" size="md" loading={submitting}>
+          <Button type="submit" variant="default" size="md" loading={submitting}>
             Create Auction
           </Button>
         </div>
@@ -751,7 +738,7 @@ export default function NewAuctionPage() {
           </Button>
           {aiSuggestion?.opening_price != null && (
             <Button
-              variant="primary"
+              variant="default"
               size="sm"
               onClick={() => applyAiSuggestions({
                 openingPrice: aiSuggestion.opening_price ?? 0,

@@ -230,7 +230,7 @@ export default function AuctionDetailPage() {
   function toggleSelect(v: VendorRow) {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(v.id) ? next.delete(v.id) : next.add(v.id);
+      if (next.has(v.id)) { next.delete(v.id); } else { next.add(v.id); }
       return next;
     });
   }
@@ -256,10 +256,8 @@ export default function AuctionDetailPage() {
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-3">
-        <Link href="/buyer/auctions">
-          <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-            <ArrowLeft size={16} />
-          </button>
+        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+          <ArrowLeft size={16} />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -323,14 +321,14 @@ export default function AuctionDetailPage() {
       {/* Actions */}
       <div className="flex items-center gap-3 flex-wrap">
         {isDraft && (
-          <Button variant="primary" size="md" loading={actionLoading} onClick={handlePublish}>
+          <Button variant="default" size="md" loading={actionLoading} onClick={handlePublish}>
             <Play size={14} />
             Publish Auction
           </Button>
         )}
         {isOpen && (
           <Link href={`/buyer/auctions/${id}/live`}>
-            <Button variant="primary" size="md">
+            <Button variant="default" size="md">
               <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
               Open Live Room
             </Button>
@@ -361,7 +359,7 @@ export default function AuctionDetailPage() {
         )}
         {deleteConfirm && (
           <div className="flex items-center gap-2">
-            <Button variant="primary" size="md" loading={deleteLoading} onClick={handleDelete}
+            <Button variant="default" size="md" loading={deleteLoading} onClick={handleDelete}
               className="bg-danger border-danger/50 shadow-none hover:bg-danger/90 text-white">
               Confirm Delete
             </Button>
@@ -425,7 +423,7 @@ export default function AuctionDetailPage() {
               <input
                 value={editForm.title}
                 onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
               />
             </div>
 
@@ -435,7 +433,7 @@ export default function AuctionDetailPage() {
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 rows={2}
-                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200 resize-none"
+                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200 resize-none"
               />
             </div>
 
@@ -448,7 +446,7 @@ export default function AuctionDetailPage() {
                   step={1}
                   value={editForm.quantity}
                   onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -456,7 +454,7 @@ export default function AuctionDetailPage() {
                 <input
                   value={editForm.unit}
                   onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
                 />
               </div>
             </div>
@@ -472,7 +470,7 @@ export default function AuctionDetailPage() {
                   step={0.01}
                   value={editForm.ceilingPriceRupees}
                   onChange={(e) => setEditForm({ ...editForm, ceilingPriceRupees: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -485,7 +483,7 @@ export default function AuctionDetailPage() {
                   step={0.01}
                   value={editForm.minDecrementRupees}
                   onChange={(e) => setEditForm({ ...editForm, minDecrementRupees: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
                 />
               </div>
             </div>
@@ -497,7 +495,7 @@ export default function AuctionDetailPage() {
                   type="datetime-local"
                   value={editForm.startTime}
                   onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -506,7 +504,7 @@ export default function AuctionDetailPage() {
                   type="datetime-local"
                   value={editForm.endTime}
                   onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
                 />
               </div>
             </div>
@@ -519,7 +517,7 @@ export default function AuctionDetailPage() {
               <Button variant="secondary" size="sm" onClick={() => setEditOpen(false)}>
                 Cancel
               </Button>
-              <Button variant="primary" size="sm" loading={saving} onClick={handleSave}>
+              <Button variant="default" size="sm" loading={saving} onClick={handleSave}>
                 Save Changes
               </Button>
             </div>
@@ -595,7 +593,7 @@ export default function AuctionDetailPage() {
                         if (isInvited) return;
                         setSelected((prev) => {
                           const next = new Set(prev);
-                          next.has(v.vendor_id) ? next.delete(v.vendor_id) : next.add(v.vendor_id);
+                          if (next.has(v.vendor_id)) { next.delete(v.vendor_id); } else { next.add(v.vendor_id); }
                           return next;
                         });
                       }}
@@ -642,7 +640,7 @@ export default function AuctionDetailPage() {
               Cancel
             </Button>
             <Button
-              variant="primary"
+              variant="default"
               size="sm"
               disabled={selected.size === 0}
               onClick={handleInvite}
