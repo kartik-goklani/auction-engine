@@ -1,18 +1,22 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/* ─── Design System: Promptly — zinc darks + purple-500 accent ──────────────── */
-/*                                                                                */
-/*  Architecture: @theme inline with var() references                             */
-/*                                                                                */
-/*  @theme inline inlines the VALUE literally into utility classes.               */
-/*  If the value IS a var() expression, the utility becomes dynamic:              */
-/*    bg-bg-page → background-color: var(--bg-page)                              */
-/*                                                                                */
-/*  Actual theme values live on :root (light) and html.dark (dark).              */
-/*  next-themes toggles the html.dark class — the utilities respond instantly.   */
-/*                                                                                */
-/*  Brand purple: #A855F7 (purple-500) — accent only, never as a background.    */
-/*  Dark backgrounds are pure zinc: #0F0F0F page · #18181B surface · #27272A border */
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Design System: Exchange — dark terminal, amber gold accent ─────────────
+ *
+ *  Aesthetic: financial trading terminal. Dense, data-forward, no decoration.
+ *  Signature: amber (#C8A96E) as the single accent — commodity gold, not tech blue.
+ *  Backgrounds: near-black with barely-visible surface separation.
+ *  Text: warm off-white (#E8E3D9), not pure white — avoids harsh contrast.
+ *  Type: DM Sans body, DM Mono for all numeric/price values.
+ *
+ *  Architecture: @theme inline with var() references.
+ *  @theme inline inlines the VALUE literally into utility classes.
+ *  Actual theme values live on :root (dark) only — this is a dark-first system.
+ *  Light mode exists as an intentional inversion, not an afterthought.
+ * ────────────────────────────────────────────────────────────────────────────── */
 
 @theme inline {
   /* Backgrounds */
@@ -25,12 +29,11 @@
   --color-bg-modal:       var(--bg-modal);
   --color-bg-tag:         var(--bg-tag);
 
-  /* Brand / Accent — Promptly purple */
+  /* Brand / Accent — Exchange amber */
   --color-accent:          var(--accent);
   --color-accent-hover:    var(--accent-hover);
   --color-accent-bright:   var(--accent-bright);
-  --color-accent-blue:     var(--accent-blue);
-  --color-accent-orange:   var(--accent-orange);
+  --color-accent-dim:      var(--accent-dim);
 
   /* Semantic */
   --color-success:         var(--success);
@@ -49,89 +52,205 @@
   --color-border-accent:   var(--border-accent);
 
   /* Fonts */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, "Courier New", monospace;
+  --font-sans:  var(--font-dm-sans), "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:  var(--font-dm-mono), "DM Mono", ui-monospace, "Courier New", monospace;
+
+  /* shadcn / base-ui compatibility tokens */
+  --color-sidebar-ring:               var(--sidebar-ring);
+  --color-sidebar-border:             var(--sidebar-border);
+  --color-sidebar-accent-foreground:  var(--sidebar-accent-foreground);
+  --color-sidebar-accent:             var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary:            var(--sidebar-primary);
+  --color-sidebar-foreground:         var(--sidebar-foreground);
+  --color-sidebar:                    var(--sidebar);
+  --color-chart-5:        var(--chart-5);
+  --color-chart-4:        var(--chart-4);
+  --color-chart-3:        var(--chart-3);
+  --color-chart-2:        var(--chart-2);
+  --color-chart-1:        var(--chart-1);
+  --color-ring:           var(--ring);
+  --color-input:          var(--input);
+  --color-border:         var(--border);
+  --color-destructive:    var(--destructive);
+  --color-accent-foreground:      var(--accent-foreground);
+  --color-muted-foreground:       var(--muted-foreground);
+  --color-muted:                  var(--muted);
+  --color-secondary-foreground:   var(--secondary-foreground);
+  --color-secondary:              var(--secondary);
+  --color-primary-foreground:     var(--primary-foreground);
+  --color-primary:                var(--primary);
+  --color-popover-foreground:     var(--popover-foreground);
+  --color-popover:                var(--popover);
+  --color-card-foreground:        var(--card-foreground);
+  --color-card:                   var(--card);
+  --color-foreground:             var(--foreground);
+  --color-background:             var(--background);
+  --radius-sm:   calc(var(--radius) * 0.5);
+  --radius-md:   var(--radius);
+  --radius-lg:   calc(var(--radius) * 1.5);
+  --radius-xl:   calc(var(--radius) * 2);
+  --radius-2xl:  calc(var(--radius) * 2.5);
+  --radius-3xl:  calc(var(--radius) * 3);
+  --radius-4xl:  calc(var(--radius) * 3.5);
 }
 
-/* ─── Light mode (base) ────────────────────────────────────────────────────── */
+/* ─── Dark mode (canonical — this system is dark-first) ────────────────────── */
 
 :root {
-  --bg-page:        #ffffff;
-  --bg-sidebar:     #ffffff;
-  --bg-card:        #ffffff;
-  --bg-card-hover:  #f4f4f5;   /* zinc-100 */
-  --bg-input:       #ffffff;
-  --bg-elevated:    #f4f4f5;   /* zinc-100 */
-  --bg-modal:       #ffffff;
-  --bg-tag:         #e4e4e7;   /* zinc-200 */
+  /* Near-black backgrounds — three distinct levels, all very dark */
+  --bg-page:        #0A0A0A;   /* near-black — the exchange floor */
+  --bg-sidebar:     #0D0D0D;   /* marginally lifted */
+  --bg-card:        #141414;   /* surface — barely visible from page */
+  --bg-card-hover:  #1C1C1C;
+  --bg-input:       #111111;
+  --bg-elevated:    #1A1A1A;
+  --bg-modal:       #141414;
+  --bg-tag:         #1E1E1E;
 
-  --accent:         #a855f7;   /* purple-500 — real Promptly brand */
-  --accent-hover:   #9333ea;   /* purple-600 */
-  --accent-bright:  #d946ef;   /* fuchsia-500 */
-  --accent-blue:    #3b82f6;
-  --accent-orange:  #f97316;
+  /* Amber gold accent — commodity exchange, not tech startup */
+  --accent:         #C8A96E;
+  --accent-hover:   #D4B97A;   /* slightly brighter on hover */
+  --accent-bright:  #E0CC9A;   /* very light amber for highlights */
+  --accent-dim:     rgba(200, 169, 110, 0.18); /* amber at 18% for backgrounds */
 
-  --success:        #16a34a;
-  --danger:         #ef4444;
-  --warning:        #f59e0b;
-  --info:           #3b82f6;
+  /* Semantic — muted tones appropriate for dark terminal */
+  --success:        #4CAF7D;   /* muted green */
+  --danger:         #E05252;   /* muted red */
+  --warning:        #D4943A;   /* warm amber-orange */
+  --info:           #6B9FD4;   /* muted blue */
 
-  --text-primary:   #18181b;   /* zinc-900 */
-  --text-secondary: #52525b;   /* zinc-600 */
-  --text-muted:     #a1a1aa;   /* zinc-400 */
+  /* Text — warm off-white, never pure white */
+  --text-primary:   #E8E3D9;
+  --text-secondary: #9E9890;
+  --text-muted:     #5C5850;
 
-  --border-subtle:  #e4e4e7;   /* zinc-200 */
-  --border-default: #d4d4d8;   /* zinc-300 */
-  --border-accent:  rgba(168, 85, 247, 0.35);
-  --inverse-control-bg:           #000000;
-  --inverse-control-hover-bg:     #111111;
-  --inverse-control-text:         #ffffff;
-  --inverse-control-border:       rgba(0, 0, 0, 0.12);
-  --inverse-control-shadow:       0 4px 14px rgba(0, 0, 0, 0.18);
-  --inverse-control-shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.24);
+  /* Borders — barely visible separation */
+  --border-subtle:  #1E1E1E;
+  --border-default: #2A2A2A;
+  --border-accent:  rgba(200, 169, 110, 0.30);
 
-  color-scheme: light;
-}
-
-/* ─── Dark mode — toggled by html.dark (next-themes) ───────────────────────── */
-
-html.dark {
-  /* Pure zinc blacks — no purple tint in backgrounds */
-  --bg-page:        #000000;
-  --bg-sidebar:     #000000;
-  --bg-card:        #18181b;   /* zinc-900 — brand-surface */
-  --bg-card-hover:  #27272a;   /* zinc-800 */
-  --bg-input:       #18181b;   /* zinc-900 */
-  --bg-elevated:    #27272a;   /* zinc-800 */
-  --bg-modal:       #18181b;   /* zinc-900 */
-  --bg-tag:         #27272a;   /* zinc-800 */
-
-  --accent:         #a855f7;   /* purple-500 — same as light */
-  --accent-hover:   #9333ea;   /* purple-600 */
-  --accent-bright:  #d946ef;   /* fuchsia-500 */
-  --accent-blue:    #60a5fa;   /* blue-400 (brighter for dark bg) */
-  --accent-orange:  #f97316;
-
-  --success:        #22c55e;   /* green-500 */
-  --danger:         #f87171;   /* red-400 */
-  --warning:        #fbbf24;   /* amber-400 */
-  --info:           #60a5fa;   /* blue-400 */
-
-  --text-primary:   #e4e4e7;   /* zinc-200 */
-  --text-secondary: #a1a1aa;   /* zinc-400 */
-  --text-muted:     #71717a;   /* zinc-500 */
-
-  --border-subtle:  #27272a;   /* zinc-800 */
-  --border-default: #3f3f46;   /* zinc-700 */
-  --border-accent:  rgba(168, 85, 247, 0.40);
-  --inverse-control-bg:           #ffffff;
-  --inverse-control-hover-bg:     #f5f5f5;
-  --inverse-control-text:         #000000;
-  --inverse-control-border:       rgba(255, 255, 255, 0.22);
-  --inverse-control-shadow:       0 4px 14px rgba(0, 0, 0, 0.24);
-  --inverse-control-shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.3);
+  /* Inverse controls (for light-on-dark elements when needed) */
+  --inverse-control-bg:           #E8E3D9;
+  --inverse-control-hover-bg:     #F2EDE3;
+  --inverse-control-text:         #0A0A0A;
+  --inverse-control-border:       rgba(232, 227, 217, 0.15);
+  --inverse-control-shadow:       0 2px 8px rgba(0, 0, 0, 0.40);
+  --inverse-control-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.50);
 
   color-scheme: dark;
+
+  /* shadcn compatibility — map to our tokens */
+  --background:     #0A0A0A;
+  --foreground:     #E8E3D9;
+  --card:           #141414;
+  --card-foreground: #E8E3D9;
+  --popover:        #141414;
+  --popover-foreground: #E8E3D9;
+  --primary:        #C8A96E;
+  --primary-foreground: #0A0A0A;
+  --secondary:      #1E1E1E;
+  --secondary-foreground: #9E9890;
+  --muted:          #1A1A1A;
+  --muted-foreground: #5C5850;
+  --accent-foreground: #0A0A0A;
+  --destructive:    #E05252;
+  --border:         #2A2A2A;
+  --input:          #1E1E1E;
+  --ring:           rgba(200, 169, 110, 0.50);
+
+  /* Chart tokens — amber gold spectrum */
+  --chart-1: #C8A96E;
+  --chart-2: #D4B97A;
+  --chart-3: #A88A50;
+  --chart-4: #8A6E3A;
+  --chart-5: #6A5028;
+
+  /* Border radius — tight, not pill */
+  --radius: 0.25rem;  /* 4px base — sharp, exchange-terminal feel */
+
+  /* Sidebar */
+  --sidebar:                   #0D0D0D;
+  --sidebar-foreground:        #E8E3D9;
+  --sidebar-primary:           #C8A96E;
+  --sidebar-primary-foreground: #0A0A0A;
+  --sidebar-accent:            #1E1E1E;
+  --sidebar-accent-foreground: #9E9890;
+  --sidebar-border:            #1E1E1E;
+  --sidebar-ring:              rgba(200, 169, 110, 0.30);
+}
+
+/* ─── Light mode (inversion of the dark system) ─────────────────────────────── */
+
+html.light, .light {
+  --bg-page:        #F5F2EC;   /* warm parchment, not pure white */
+  --bg-sidebar:     #EDE9E0;
+  --bg-card:        #FDFAF4;
+  --bg-card-hover:  #F0EDE4;
+  --bg-input:       #FDFAF4;
+  --bg-elevated:    #EDE9E0;
+  --bg-modal:       #FDFAF4;
+  --bg-tag:         #E5E1D8;
+
+  --accent:         #A07840;   /* amber, deeper for light bg */
+  --accent-hover:   #8A6430;
+  --accent-bright:  #C8A96E;
+  --accent-dim:     rgba(160, 120, 64, 0.12);
+
+  --success:        #2E7D52;
+  --danger:         #C03030;
+  --warning:        #A0622A;
+  --info:           #3A6EA8;
+
+  --text-primary:   #1A1714;
+  --text-secondary: #5A5248;
+  --text-muted:     #9A9088;
+
+  --border-subtle:  #DDD8CE;
+  --border-default: #C8C3B8;
+  --border-accent:  rgba(160, 120, 64, 0.30);
+
+  --inverse-control-bg:           #1A1714;
+  --inverse-control-hover-bg:     #2A2420;
+  --inverse-control-text:         #F5F2EC;
+  --inverse-control-border:       rgba(26, 23, 20, 0.15);
+  --inverse-control-shadow:       0 2px 8px rgba(0, 0, 0, 0.20);
+  --inverse-control-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.28);
+
+  color-scheme: light;
+
+  --background:     #F5F2EC;
+  --foreground:     #1A1714;
+  --card:           #FDFAF4;
+  --card-foreground: #1A1714;
+  --popover:        #FDFAF4;
+  --popover-foreground: #1A1714;
+  --primary:        #A07840;
+  --primary-foreground: #F5F2EC;
+  --secondary:      #E5E1D8;
+  --secondary-foreground: #5A5248;
+  --muted:          #EDE9E0;
+  --muted-foreground: #9A9088;
+  --accent-foreground: #F5F2EC;
+  --destructive:    #C03030;
+  --border:         #C8C3B8;
+  --input:          #DDD8CE;
+  --ring:           rgba(160, 120, 64, 0.40);
+
+  --chart-1: #A07840;
+  --chart-2: #B88848;
+  --chart-3: #8A6030;
+  --chart-4: #6A4820;
+  --chart-5: #4A3010;
+
+  --sidebar:                   #EDE9E0;
+  --sidebar-foreground:        #1A1714;
+  --sidebar-primary:           #A07840;
+  --sidebar-primary-foreground: #F5F2EC;
+  --sidebar-accent:            #E5E1D8;
+  --sidebar-accent-foreground: #5A5248;
+  --sidebar-border:            #DDD8CE;
+  --sidebar-ring:              rgba(160, 120, 64, 0.30);
 }
 
 /* ─── Base ─────────────────────────────────────────────────────────────────── */
@@ -147,18 +266,45 @@ body {
   background-color: var(--bg-page);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  transition: background-color 0.2s ease, color 0.15s ease;
 }
 
-/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+/* ─── Scrollbar — minimal amber tint ────────────────────────────────────────── */
 
-::-webkit-scrollbar               { width: 6px; height: 6px; }
-::-webkit-scrollbar-track         { background: transparent; border-radius: 999px; }
+::-webkit-scrollbar               { width: 4px; height: 4px; }
+::-webkit-scrollbar-track         { background: transparent; }
 ::-webkit-scrollbar-thumb         {
-  background: linear-gradient(180deg, rgba(168, 85, 247, 0.55), rgba(124, 58, 237, 0.45));
+  background: rgba(200, 169, 110, 0.25);
   border-radius: 999px;
-  border: 1px solid rgba(39, 39, 42, 0.4);
 }
 ::-webkit-scrollbar-thumb:hover   {
-  background: linear-gradient(180deg, rgba(192, 132, 252, 0.70), rgba(147, 51, 234, 0.60));
+  background: rgba(200, 169, 110, 0.45);
 }
+
+/* ─── Tailwind base layer ─────────────────────────────────────────────────── */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* ─── Exchange signature animations ─────────────────────────────────────────── */
+
+@keyframes amber-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes ticker-in {
+  from { transform: translateY(-6px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.animate-amber-pulse { animation: amber-pulse 2s ease-in-out infinite; }
+.animate-ticker-in   { animation: ticker-in 0.18s ease-out forwards; }

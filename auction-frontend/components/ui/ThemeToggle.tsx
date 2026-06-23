@@ -28,14 +28,15 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       type="button"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-lg border border-border-subtle bg-bg-card transition-colors duration-150',
-        'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+        'flex h-6 w-6 items-center justify-center border border-border-subtle bg-transparent transition-colors duration-150',
+        'text-text-muted hover:text-text-primary hover:bg-bg-elevated',
+        'rounded-[3px]',
         className,
       )}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {isDark ? <Sun size={16} /> : <Moon size={16} />}
+      {isDark ? <Sun size={12} /> : <Moon size={12} />}
     </button>
   );
 }
