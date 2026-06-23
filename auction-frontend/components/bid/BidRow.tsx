@@ -20,8 +20,8 @@ export function BidRow({ bid, alias, showVendor = false }: BidRowProps) {
   return (
     <div
       className={cn(
-        'flex items-center justify-between px-3 py-2.5 rounded-lg',
-        bid.status === BidStatus.ACCEPTED ? 'bg-success/5' : 'bg-bg-elevated',
+        'flex items-center justify-between px-3 py-2.5 rounded-[3px]',
+        bid.status === BidStatus.ACCEPTED ? 'bg-success/8' : 'bg-bg-elevated',
       )}
     >
       <div className="flex items-center gap-3">

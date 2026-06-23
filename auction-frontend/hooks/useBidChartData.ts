@@ -12,7 +12,7 @@ import { BidStatus, AuctionType } from '@/lib/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const COLOR_PALETTE = ['#a855f7', '#60a5fa', '#34d399', '#fbbf24', '#f87171'] as const;
+const COLOR_PALETTE = ['#22c55e', '#f97316', '#eab308', '#86efac', '#fdba74'] as const;
 const VENDOR_LABELS = 'ABCDEFGHIJ'.split('');
 
 // ─── Types ────────────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ const AGENT_LABELS: Record<AgentType, string> = {
 function ToolCallRow({ call }: { call: ToolCall }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-lg border border-border-subtle overflow-hidden">
+    <div className="rounded-[4px] border border-border-subtle overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
@@ -66,7 +66,7 @@ function AgentRunAccordion({ run }: { run: AgentRunRow }) {
   return (
     <div
       className={cn(
-        'rounded-[10px] border overflow-hidden',
+        'rounded-[4px] border overflow-hidden',
         isAnomalyWarning ? 'border-warning/50 bg-warning/[0.03]' : 'border-border-subtle',
       )}
     >
@@ -124,7 +124,7 @@ function AgentRunAccordion({ run }: { run: AgentRunRow }) {
           {run.final_output && (
             <div>
               <p className="mb-1.5 text-[10px] uppercase tracking-wider text-text-muted">Final Output</p>
-              <div className="rounded-lg bg-bg-input px-3 py-2.5 overflow-x-auto">
+              <div className="rounded-[4px] bg-bg-input border border-border-subtle px-3 py-2.5 overflow-x-auto">
                 <JsonViewer value={run.final_output} />
               </div>
             </div>

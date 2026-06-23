@@ -13,23 +13,23 @@ export function TrafficLightBadge({ status, greenPct, yellowPct }: TrafficLightB
 
   const config = {
     [TrafficLightStatus.GREEN]: {
-      dotClass: 'bg-green-500 animate-pulse',
+      dotClass: 'bg-success animate-pulse',
       label: 'Competitive',
-      textClass: 'text-green-700',
+      textClass: 'text-success',
       tooltip: greenPct != null ? `Within ${greenPct}% of best price` : 'Competitive bid',
     },
     [TrafficLightStatus.YELLOW]: {
-      dotClass: 'bg-amber-400',
+      dotClass: 'bg-warning',
       label: 'Marginal',
-      textClass: 'text-amber-700',
+      textClass: 'text-warning',
       tooltip: greenPct != null && yellowPct != null
         ? `${greenPct}–${yellowPct}% from best price`
         : 'Marginally competitive',
     },
     [TrafficLightStatus.RED]: {
-      dotClass: 'bg-red-500',
+      dotClass: 'bg-danger',
       label: 'Not competitive',
-      textClass: 'text-red-700',
+      textClass: 'text-danger',
       tooltip: yellowPct != null ? `More than ${yellowPct}% from best price` : 'Not competitive',
     },
   } as const;

@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ResponsiveContainer,
+  AreaChart,
+  Area,
   LineChart,
   Line,
   BarChart,
@@ -90,6 +92,12 @@ function dotRadius(severity: AlertSeverity): number {
   return 4;
 }
 
+// ─── Sanitise a vendor key into a valid SVG gradient ID ───────────────────────
+
+function toGradId(key: string): string {
+  return `grad-${key.replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
 function fmtTime(ms: number): string {
@@ -134,12 +142,12 @@ function CustomTooltip({ active, payload, label, isCount, isPct, isRank }: Custo
   if (!active || !payload?.length || label == null) return null;
   const timeLabel = typeof label === 'number' ? fmtTime(label) : String(label);
   return (
-    <div className="rounded-[10px] bg-bg-card border border-border-subtle shadow-[0_4px_16px_rgba(0,0,0,0.4)] p-3 min-w-[140px]">
-      <p className="text-[10px] text-text-muted mb-2">{timeLabel}</p>
+    <div className="rounded-[10px] bg-bg-card border border-border-subtle shadow-[0_8px_24px_rgba(0,0,0,0.5)] p-3 min-w-[148px]">
+      <p className="text-[10px] text-text-muted mb-2 font-mono">{timeLabel}</p>
       {payload.map((entry) => (
-        <div key={`${entry.name}-${entry.value}`} className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
+        <div key={`${entry.name}-${entry.value}`} className="flex items-center justify-between gap-4 py-0.5">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
             <span className="text-[11px] text-text-secondary">{entry.name}</span>
           </div>
           <span className="text-[11px] font-semibold text-text-primary font-mono">
@@ -171,10 +179,10 @@ function TabButton({ id, label, active, onClick }: { id: string; label: string; 
       type="button"
       onClick={onClick}
       className={[
-        'px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors duration-150 whitespace-nowrap',
+        'px-3 py-1.5 rounded-[4px] text-[11px] font-medium transition-all duration-150 whitespace-nowrap',
         active
-          ? 'bg-bg-elevated text-text-primary'
-          : 'text-text-muted hover:text-text-secondary',
+          ? 'bg-accent/10 text-accent border border-accent/25'
+          : 'text-text-muted hover:text-text-secondary hover:bg-bg-elevated/60 border border-transparent',
       ].join(' ')}
     >
       {label}
@@ -186,7 +194,7 @@ function TabButton({ id, label, active, onClick }: { id: string; label: string; 
 
 function EmptyChart() {
   return (
-    <div className="h-[220px] flex items-center justify-center">
+    <div className="h-[264px] flex items-center justify-center">
       <p className="text-xs text-text-muted">No accepted bids yet</p>
     </div>
   );
@@ -295,7 +303,21 @@ export function BidTrendChart({
   const axisStyle  = { fontSize: 10, fill: '#71717a' };
   const gridStroke = '#27272a';
 
-  // ── Render helper: vendor lines ───────────────────────────────────────────────
+  // ── Gradient defs for area charts (one per vendor) ───────────────────────────
+  function renderGradientDefs() {
+    return (
+      <defs>
+        {vendorLines.map(({ key, color }) => (
+          <linearGradient key={toGradId(key)} id={toGradId(key)} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor={color} stopOpacity={0.15} />
+            <stop offset="95%" stopColor={color} stopOpacity={0}    />
+          </linearGradient>
+        ))}
+      </defs>
+    );
+  }
+
+  // ── Render helper: vendor lines (rank timeline) ───────────────────────────────
   function renderVendorLines() {
     return vendorLines.map(({ key, color }) => (
       <Line
@@ -303,9 +325,27 @@ export function BidTrendChart({
         type="monotone"
         dataKey={key}
         stroke={color}
-        strokeWidth={1.5}
+        strokeWidth={2}
         dot={false}
-        activeDot={{ r: 3, strokeWidth: 0 }}
+        activeDot={{ r: 4, strokeWidth: 0 }}
+        connectNulls
+        hide={hiddenVendors.has(key)}
+      />
+    ));
+  }
+
+  // ── Render helper: vendor areas (line charts with gradient fill) ──────────────
+  function renderVendorAreas() {
+    return vendorLines.map(({ key, color }) => (
+      <Area
+        key={key}
+        type="monotone"
+        dataKey={key}
+        stroke={color}
+        strokeWidth={2}
+        fill={`url(#${toGradId(key)})`}
+        dot={false}
+        activeDot={{ r: 4, strokeWidth: 0 }}
         connectNulls
         hide={hiddenVendors.has(key)}
       />
@@ -320,6 +360,7 @@ export function BidTrendChart({
         stackId={stackId}
         fill={color}
         maxBarSize={48}
+        radius={[2, 2, 0, 0]}
         hide={hiddenVendors.has(key)}
       />
     ));
@@ -334,8 +375,8 @@ export function BidTrendChart({
     if (tab === 'traffic') {
       if (!trafficLightConfig?.enabled) {
         return (
-          <div className="h-[220px] flex items-center justify-center">
-            <div className="rounded-lg border border-border-subtle bg-bg-elevated px-5 py-4 text-center">
+          <div className="h-[264px] flex items-center justify-center">
+            <div className="rounded-[4px] border border-border-subtle bg-bg-elevated px-5 py-4 text-center">
               <p className="text-xs text-text-muted">Traffic lights not enabled for this auction</p>
             </div>
           </div>
@@ -347,17 +388,25 @@ export function BidTrendChart({
         { status: 'RED',    color: '#ef4444', label: 'Off pace',        count: trafficLightData.RED    },
       ] as const;
       return (
-        <div className="h-[220px] flex items-center justify-center gap-4">
+        <div className="h-[264px] flex items-center justify-center gap-5">
           {cards.map(({ status, color, label, count }) => (
             <div
               key={status}
-              className="flex flex-col items-center gap-3 rounded-xl border border-border-subtle bg-bg-elevated px-6 py-5 min-w-[100px]"
+              className="flex flex-col items-center gap-3 rounded-lg px-8 py-6 min-w-[120px]"
+              style={{
+                background: `linear-gradient(145deg, ${color}0a, transparent)`,
+                border: `1px solid ${color}30`,
+              }}
             >
-              <span className="h-4 w-4 rounded-full" style={{ backgroundColor: color }} />
-              <div className="text-center">
-                <p className="text-xl font-bold font-mono text-text-primary">{count}</p>
-                <p className="text-[10px] text-text-muted mt-0.5">{label}</p>
-              </div>
+              <span
+                className="h-5 w-5 rounded-full"
+                style={{
+                  backgroundColor: color,
+                  boxShadow: `0 0 12px ${color}88`,
+                }}
+              />
+              <p className="text-3xl font-bold font-mono" style={{ color }}>{count}</p>
+              <p className="text-[11px] text-text-muted text-center leading-tight">{label}</p>
             </div>
           ))}
         </div>
@@ -368,12 +417,11 @@ export function BidTrendChart({
     if (tab === 'benchmark') {
       if (!marketBenchmark) {
         return (
-          <div className="h-[220px] flex items-center justify-center">
+          <div className="h-[264px] flex items-center justify-center">
             <p className="text-xs text-text-muted">Price intelligence data not available for this auction.</p>
           </div>
         );
       }
-      // Collapse bestPriceData to a single "Market Best" line
       const isReverse    = auctionType !== AuctionType.FORWARD;
       const marketBestData = bestPriceData.map((pt) => {
         const { ts, ...rest } = pt as Record<string, number>;
@@ -384,17 +432,23 @@ export function BidTrendChart({
       }).filter(Boolean) as { ts: number; 'Market Best': number }[];
 
       return (
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={marketBestData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <AreaChart data={marketBestData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="grad-benchmark" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0}    />
+                </linearGradient>
+              </defs>
               <CartesianGrid vertical={false} stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis dataKey="ts" tickFormatter={fmtTime} tick={axisStyle} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={fmtAmount} tick={axisStyle} tickLine={false} axisLine={false} width={52} />
               <Tooltip content={<CurrencyTooltip />} />
-              <ReferenceLine y={marketBenchmark.recommendedUnitPrice} stroke="#6366f1" strokeDasharray="4 2" label={{ value: 'AI Benchmark', fill: '#6366f1', fontSize: 10 }} />
+              <ReferenceLine y={marketBenchmark.recommendedUnitPrice} stroke="#eab308" strokeDasharray="4 2" label={{ value: 'AI Benchmark', fill: '#eab308', fontSize: 10 }} />
               <ReferenceLine y={ceilingPrice}                         stroke="#ef4444" strokeDasharray="4 2" label={{ value: 'Ceiling',       fill: '#ef4444', fontSize: 10 }} />
-              <Line type="monotone" dataKey="Market Best" stroke="#3b82f6" strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} connectNulls />
-            </LineChart>
+              <Area type="monotone" dataKey="Market Best" stroke="#22c55e" strokeWidth={2} fill="url(#grad-benchmark)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} connectNulls />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       );
@@ -403,16 +457,16 @@ export function BidTrendChart({
     // ── AWARD GAP (horizontal bar chart) ──────────────────────────────────────
     if (tab === 'award') {
       return (
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={awardGapData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <BarChart data={awardGapData} layout="vertical" margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid horizontal={false} stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis type="number" tickFormatter={fmtAmount} tick={axisStyle} tickLine={false} axisLine={false} />
               <YAxis type="category" dataKey="vendor" tick={axisStyle} tickLine={false} axisLine={false} width={56} />
               <Tooltip content={<CurrencyTooltip />} />
-              <Bar dataKey="finalBid" maxBarSize={24}>
+              <Bar dataKey="finalBid" maxBarSize={24} radius={[0, 2, 2, 0]}>
                 {awardGapData.map((entry, idx) => (
-                  <Cell key={entry.vendor} fill={idx === 0 ? '#6366f1' : '#52525b'} />
+                  <Cell key={entry.vendor} fill={idx === 0 ? '#22c55e' : '#52525b'} />
                 ))}
               </Bar>
             </BarChart>
@@ -424,19 +478,17 @@ export function BidTrendChart({
     // ── BID IMPROVEMENT (grouped bars) ────────────────────────────────────────
     if (tab === 'improvement') {
       return (
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bidImprovementData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <BarChart data={bidImprovementData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid vertical={false} stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis dataKey="vendor" tick={axisStyle} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={fmtAmount} tick={axisStyle} tickLine={false} axisLine={false} width={52} />
               <Tooltip content={<CurrencyTooltip />} />
-              {/* First bid (muted) — one Bar element applies to all data points */}
-              <Bar dataKey="firstBid" name="First Bid" fill="#52525b" maxBarSize={24} />
-              {/* Final bid — colored per vendor using Cell overrides */}
-              <Bar dataKey="lastBid" name="Final Bid" maxBarSize={24}>
+              <Bar dataKey="firstBid" name="First Bid" fill="#52525b" maxBarSize={24} radius={[2, 2, 0, 0]} />
+              <Bar dataKey="lastBid"  name="Final Bid" maxBarSize={24} radius={[2, 2, 0, 0]}>
                 {bidImprovementData.map(({ vendor }) => (
-                  <Cell key={vendor} fill={vendorColors[vendor] ?? '#3b82f6'} />
+                  <Cell key={vendor} fill={vendorColors[vendor] ?? '#22c55e'} />
                 ))}
               </Bar>
             </BarChart>
@@ -448,9 +500,9 @@ export function BidTrendChart({
     // ── BID COUNT VS DROP (scatter chart) ────────────────────────────────────
     if (tab === 'scatter') {
       return (
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 4, right: 8, bottom: 20, left: 0 }}>
+            <ScatterChart margin={{ top: 8, right: 12, bottom: 20, left: 0 }}>
               <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis
                 dataKey="bidCount"
@@ -479,7 +531,7 @@ export function BidTrendChart({
                   const d = payload[0]?.payload as { vendor: string; bidCount: number; priceDrop: number } | undefined;
                   if (!d) return null;
                   return (
-                    <div className="rounded-[10px] bg-bg-card border border-border-subtle shadow-[0_4px_16px_rgba(0,0,0,0.4)] p-3">
+                    <div className="rounded-[10px] bg-bg-card border border-border-subtle shadow-[0_8px_24px_rgba(0,0,0,0.5)] p-3">
                       <p className="text-[11px] font-semibold text-text-primary">{d.vendor}</p>
                       <p className="text-[10px] text-text-muted">{d.bidCount} bids · {fmtPct(d.priceDrop)} drop</p>
                     </div>
@@ -487,7 +539,7 @@ export function BidTrendChart({
                 }}
               />
               {bidCountVsPriceDropData.map((entry) => {
-                const color  = vendorColors[entry.vendor] ?? '#3b82f6';
+                const color  = vendorColors[entry.vendor] ?? '#22c55e';
                 const letter = entry.vendor.replace('Bidder ', '');
                 return (
                   <Scatter
@@ -500,7 +552,8 @@ export function BidTrendChart({
                       const cy = props.cy ?? 0;
                       return (
                         <g>
-                          <circle cx={cx} cy={cy} r={12} fill={color} opacity={0.85} />
+                          <circle cx={cx} cy={cy} r={14} fill={color} opacity={0.15} />
+                          <circle cx={cx} cy={cy} r={10} fill={color} opacity={0.9}  />
                           <text x={cx} y={cy + 4} textAnchor="middle" fill="#fff" fontSize={10} fontWeight={600}>{letter}</text>
                         </g>
                       );
@@ -517,9 +570,9 @@ export function BidTrendChart({
     // ── BID VELOCITY (stacked bar, 30-second buckets) ─────────────────────────
     if (tab === 'velocity') {
       return (
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bidVelocityData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <BarChart data={bidVelocityData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid vertical={false} stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis dataKey="bucket" tick={axisStyle} tickLine={false} axisLine={false} />
               <YAxis tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
@@ -534,16 +587,22 @@ export function BidTrendChart({
     // ── SAVINGS TRACKER ───────────────────────────────────────────────────────
     if (tab === 'savings') {
       return (
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={savingsData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <AreaChart data={savingsData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="grad-savings" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}    />
+                </linearGradient>
+              </defs>
               <CartesianGrid vertical={false} stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis dataKey="ts" tickFormatter={fmtTime} tick={axisStyle} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={fmtPct} tick={axisStyle} tickLine={false} axisLine={false} width={44} />
               <Tooltip content={<PctTooltip />} />
               <ReferenceLine y={0} stroke="#52525b" strokeDasharray="4 2" label={{ value: '0%', fill: '#52525b', fontSize: 10 }} />
-              <Line type="monotone" dataKey="savingsPct" name="Savings" stroke="#10b981" strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
-            </LineChart>
+              <Area type="monotone" dataKey="savingsPct" name="Savings" stroke="#10b981" strokeWidth={2} fill="url(#grad-savings)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       );
@@ -552,9 +611,9 @@ export function BidTrendChart({
     // ── RANK TIMELINE ─────────────────────────────────────────────────────────
     if (tab === 'rank') {
       return (
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rankTimelineData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <LineChart data={rankTimelineData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid vertical={false} stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis dataKey="ts" tickFormatter={fmtTime} tick={axisStyle} tickLine={false} axisLine={false} />
               <YAxis
@@ -575,22 +634,23 @@ export function BidTrendChart({
       );
     }
 
-    // ── ALL BIDS, BEST PRICE, SPREAD (LineCharts) ─────────────────────────────
+    // ── ALL BIDS, BEST PRICE, SPREAD (AreaCharts with gradient fill) ──────────
     const data =
       tab === 'bids'   ? allBidsData   :
       tab === 'best'   ? bestPriceData :
-      spreadData; // spread
+      spreadData;
 
     return (
       <div ref={chartWrapperRef} className="relative">
-        <div className="h-[220px]">
+        <div className="h-[264px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              {renderGradientDefs()}
               <CartesianGrid vertical={false} stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis dataKey="ts" tickFormatter={fmtTime} tick={axisStyle} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={fmtAmount} tick={axisStyle} tickLine={false} axisLine={false} width={52} />
               <Tooltip content={<CurrencyTooltip />} />
-              {renderVendorLines()}
+              {renderVendorAreas()}
               {/* Anomaly overlay — results page All Bids tab only */}
               {tab === 'bids' && showAlerts && anomalyDots.map(({ alert, ts, amount }) => (
                 <ReferenceDot
@@ -616,14 +676,14 @@ export function BidTrendChart({
                   onMouseLeave={() => { setHoveredAlert(null); setTooltipPos(null); }}
                 />
               ))}
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Floating hover tooltip */}
         {hoveredAlert && tooltipPos && (
           <div
-            className="pointer-events-none absolute z-50 w-64 rounded-lg border border-border-subtle bg-bg-card shadow-[0_4px_16px_rgba(0,0,0,0.4)] p-3"
+            className="pointer-events-none absolute z-50 w-64 rounded-[4px] border border-border-default bg-bg-elevated shadow-[0_8px_24px_rgba(0,0,0,0.5)] p-3"
             style={{
               left:      tooltipPos.x,
               top:       tooltipPos.y,
@@ -684,7 +744,7 @@ export function BidTrendChart({
       return (
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="h-[2px] w-5 rounded-full bg-[#6366f1]" />
+            <span className="h-[2px] w-5 rounded-full bg-[#22c55e]" />
             <span className="text-[10px] text-text-muted">Winner</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -702,7 +762,7 @@ export function BidTrendChart({
             <span className="text-[10px] text-text-muted">First Bid</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#3b82f6]" />
+            <span className="h-2.5 w-2.5 rounded-sm bg-[#22c55e]" />
             <span className="text-[10px] text-text-muted">Final Bid</span>
           </div>
         </div>

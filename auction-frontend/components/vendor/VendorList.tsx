@@ -30,15 +30,15 @@ export function VendorList({ vendors, onSelect, selectedIds }: VendorListProps) 
             type="button"
             onClick={() => onSelect?.(vendor)}
             className={cn(
-              'flex items-center justify-between w-full text-left px-4 py-3 rounded-lg',
-              'border transition-all duration-150',
+              'flex items-center justify-between w-full text-left px-4 py-3 rounded-[4px]',
+              'border transition-colors duration-150',
               selected
-                ? 'bg-accent/10 border-accent/30'
+                ? 'bg-accent/8 border-border-accent'
                 : 'bg-bg-elevated border-border-subtle hover:border-border-default',
             )}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-card border border-border-subtle">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] bg-bg-card border border-border-subtle">
                 <Building2 size={14} className="text-text-muted" />
               </div>
               <div className="min-w-0">

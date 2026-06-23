@@ -33,9 +33,9 @@ export function VendorInviteRow({ invitation, vendor, onRevoke }: VendorInviteRo
       invitation.status === InvitationStatus.ACCEPTED);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-bg-elevated border border-border-subtle">
+    <div className="flex items-center justify-between px-4 py-3 rounded-[4px] bg-bg-elevated border border-border-subtle">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-card border border-border-subtle">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] bg-bg-card border border-border-subtle">
           <Building2 size={14} className="text-text-muted" />
         </div>
         <div className="min-w-0">

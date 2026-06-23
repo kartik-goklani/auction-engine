@@ -1,7 +1,9 @@
+'use client';
+
+import { motion } from 'motion/react';
 import type { AuctionRow } from '@/lib/types';
 import { AuctionStatus, AuctionType } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
 import { AuctionStatusBadge } from './AuctionStatusBadge';
 import { AuctionTypeTag } from './AuctionTypeTag';
 import { AuctionTimer } from './AuctionTimer';
@@ -11,34 +13,43 @@ interface AuctionCardProps {
   onClick?: () => void;
 }
 
-const STATUS_BORDER: Record<AuctionStatus, string> = {
+const STATUS_ACCENT: Record<AuctionStatus, string> = {
   [AuctionStatus.DRAFT]:           'border-l-border-default',
   [AuctionStatus.PUBLISHED]:       'border-l-warning',
   [AuctionStatus.OPEN]:            'border-l-success',
   [AuctionStatus.PAUSED]:          'border-l-warning',
   [AuctionStatus.RESERVE_NOT_MET]: 'border-l-danger',
-  [AuctionStatus.CLOSED]:          'border-l-text-muted',
+  [AuctionStatus.CLOSED]:          'border-l-border-default',
   [AuctionStatus.AWARDED]:         'border-l-accent',
   [AuctionStatus.CANCELLED]:       'border-l-danger',
 };
 
 export function AuctionCard({ auction, onClick }: AuctionCardProps) {
-  const isLive     = auction.status === AuctionStatus.OPEN;
-  const hasCeiling = auction.ceiling_price != null;
-  const borderLeft = STATUS_BORDER[auction.status] ?? 'border-l-border-default';
+  const isLive       = auction.status === AuctionStatus.OPEN;
+  const hasCeiling   = auction.ceiling_price != null;
+  const accentBorder = STATUS_ACCENT[auction.status] ?? 'border-l-border-default';
 
   return (
-    <Card
-      interactive={!!onClick}
+    <motion.div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      className={`flex flex-col gap-0 p-0 border-l-4 ${borderLeft}`}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); } : undefined}
+      whileHover={onClick ? { y: -2, transition: { duration: 0.15 } } : undefined}
+      whileTap={onClick ? { scale: 0.99 } : undefined}
+      className={[
+        'flex flex-col bg-bg-card border border-border-subtle border-l-2',
+        accentBorder,
+        'rounded-[4px] overflow-hidden',
+        onClick && 'cursor-pointer hover:bg-bg-card-hover transition-colors duration-150',
+      ].filter(Boolean).join(' ')}
     >
       {/* Main content */}
-      <div className="flex flex-col gap-3 px-4 pb-3 pt-4 pl-5">
-        {/* Header row: title + badges */}
+      <div className="flex flex-col gap-2.5 px-4 pt-4 pb-3">
+        {/* Header row */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-snug text-text-primary">
+            <p className="truncate text-[13px] font-semibold leading-snug text-text-primary">
               {auction.title}
             </p>
             {auction.description && (
@@ -47,19 +58,19 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
               </p>
             )}
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="flex shrink-0 flex-col items-end gap-1">
             <AuctionStatusBadge status={auction.status} pulse />
             <AuctionTypeTag type={auction.type} />
           </div>
         </div>
 
-        {/* Price metric */}
+        {/* Price — the signature data element in amber mono */}
         {hasCeiling && (
           <div className="flex items-baseline gap-2">
-            <span className="text-[10px] uppercase tracking-widest text-text-muted">
+            <span className="text-[9px] uppercase tracking-widest text-text-muted">
               {auction.type === AuctionType.FORWARD ? 'Floor' : 'Ceiling'}
             </span>
-            <span className="font-mono text-base font-bold text-text-primary">
+            <span className="font-mono text-base font-semibold text-accent">
               {formatCurrency(auction.ceiling_price!)}
             </span>
           </div>
@@ -67,29 +78,27 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
 
         {/* Category chip */}
         {auction.category && (
-          <div>
-            <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-[10px] font-medium tracking-wide text-text-secondary">
-              {auction.category}
-            </span>
-          </div>
+          <span className="inline-flex self-start bg-bg-tag px-2 py-0.5 text-[9px] font-medium tracking-wider uppercase text-text-muted rounded-[2px]">
+            {auction.category}
+          </span>
         )}
       </div>
 
-      {/* Time strip — always shows both START and END */}
-      <div className="mt-1 grid grid-cols-2 divide-x divide-border-subtle border-t border-border-subtle">
-        <div className="flex flex-col gap-0.5 py-2.5 pl-5 pr-3">
-          <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted">
+      {/* Time strip */}
+      <div className="grid grid-cols-2 divide-x divide-border-subtle border-t border-border-subtle">
+        <div className="flex flex-col gap-0.5 py-2.5 px-4">
+          <span className="text-[8px] font-semibold uppercase tracking-widest text-text-muted">
             Start
           </span>
-          <span className="text-[11px] font-medium tabular-nums text-text-secondary">
+          <span className="text-[11px] font-mono text-text-secondary tabular-nums">
             {auction.start_time ? formatDate(auction.start_time) : '—'}
           </span>
         </div>
-        <div className="flex flex-col gap-0.5 px-4 py-2.5">
-          <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted">
+        <div className="flex flex-col gap-0.5 py-2.5 px-4">
+          <span className="text-[8px] font-semibold uppercase tracking-widest text-text-muted">
             End
           </span>
-          <div className="text-[11px] font-medium tabular-nums text-text-secondary">
+          <div className="text-[11px] font-mono text-text-secondary tabular-nums">
             {isLive && auction.end_time ? (
               <AuctionTimer endTime={auction.end_time} />
             ) : (
@@ -98,6 +107,6 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
           </div>
         </div>
       </div>
-    </Card>
+    </motion.div>
   );
 }

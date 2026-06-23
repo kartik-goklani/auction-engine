@@ -128,7 +128,7 @@ export function PriceIntelligenceCard({
       {metricCards.length > 0 ? (
         <div className={cn('grid gap-3 items-start', metricCards.length <= 2 ? 'grid-cols-2' : metricCards.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4')}>
           {metricCards.map(({ label, value, badge, badgeVariant }) => (
-            <div key={label} className="rounded-lg bg-bg-elevated px-3 py-2.5">
+            <div key={label} className="rounded-[4px] bg-bg-elevated border border-border-subtle px-3 py-2.5">
               <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
               <p className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</p>
               {badge && (
@@ -140,7 +140,7 @@ export function PriceIntelligenceCard({
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-warning/25 bg-warning/5 px-3 py-3">
+        <div className="rounded-[4px] border border-warning/30 bg-warning/8 px-3 py-3">
           <p className="text-xs font-medium text-text-primary">Not Enough Pricing Evidence</p>
           <p className="mt-1 text-xs text-text-secondary">
             The agent could not find enough credible current web pricing signals to auto-fill values safely.
@@ -166,7 +166,7 @@ export function PriceIntelligenceCard({
                 href={source.url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-lg bg-bg-elevated px-3 py-2 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                className="rounded-[3px] bg-bg-elevated border border-border-subtle px-3 py-2 text-xs text-text-secondary hover:text-text-primary transition-colors"
               >
                 <span className="font-medium text-text-primary">{source.title}</span>
                 <span className="block text-text-muted mt-0.5">
@@ -206,7 +206,7 @@ export function PriceIntelligenceCard({
   }
 
   return (
-    <Card className={cn('flex flex-col gap-4 border-accent/25 bg-gradient-to-b from-accent/5 to-transparent')}>
+    <Card accentRule className={cn('flex flex-col gap-4')}>
       {content}
     </Card>
   );

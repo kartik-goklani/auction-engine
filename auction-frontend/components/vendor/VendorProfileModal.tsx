@@ -16,6 +16,7 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
   const [vendor,  setVendor]  = useState<VendorWithPerformance | null>(null);
   const [loading, setLoading] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!vendorId) { setVendor(null); return; }
     setLoading(true);
@@ -25,6 +26,7 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
       .catch(() => setVendor(null))
       .finally(() => setLoading(false));
   }, [vendorId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <Modal open={!!vendorId} onClose={onClose} title="Vendor Profile" size="md">
@@ -37,8 +39,8 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
 
           {/* Identity */}
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/10 border border-accent/20">
-              <Building2 size={20} className="text-accent" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-accent-dim border border-border-accent rounded-[4px]">
+              <Building2 size={16} className="text-accent" />
             </div>
             <div>
               <p className="text-base font-semibold text-text-primary">{vendor.company_name}</p>
@@ -48,14 +50,14 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
 
           {/* Contact info */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-2 rounded-lg bg-bg-elevated border border-border-subtle p-3">
+            <div className="flex items-center gap-2 border border-border-subtle bg-bg-elevated rounded-[4px] p-3">
               <User size={13} className="text-text-muted shrink-0" />
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wider text-text-muted">Contact</p>
                 <p className="text-xs font-medium text-text-primary truncate">{vendor.contact_name}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-lg bg-bg-elevated border border-border-subtle p-3">
+            <div className="flex items-center gap-2 border border-border-subtle bg-bg-elevated rounded-[4px] p-3">
               <Mail size={13} className="text-text-muted shrink-0" />
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wider text-text-muted">Email</p>
@@ -75,7 +77,7 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
                 {vendor.category_tags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded-full bg-bg-tag text-text-secondary text-[10px] font-medium px-2.5 py-1"
+                    className="bg-bg-tag text-text-muted text-[9px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-[2px]"
                   >
                     {tag}
                   </span>
@@ -95,7 +97,7 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
                 {vendor.performance_scores.map((score, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between rounded-lg bg-bg-elevated border border-border-subtle px-3 py-2"
+                    className="flex items-center justify-between border border-border-subtle bg-bg-elevated rounded-[4px] px-3 py-2"
                   >
                     <p className="text-xs text-text-secondary">{score.category}</p>
                     <div className="flex items-center gap-4">
@@ -128,7 +130,7 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
 
           {/* Active flags */}
           {vendor.active_flags.length > 0 && (
-            <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 flex flex-col gap-2">
+            <div className="border border-warning/30 bg-warning/8 p-3 rounded-[4px] flex flex-col gap-2">
               <div className="flex items-center gap-1.5">
                 <AlertTriangle size={13} className="text-warning" />
                 <p className="text-xs font-semibold text-warning">Active Flags</p>

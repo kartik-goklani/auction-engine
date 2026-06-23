@@ -8,9 +8,9 @@ import { formatCurrency } from '@/lib/utils';
 
 interface ReserveNotMetModalProps {
   open:          boolean;
-  bestBid:       number;  // paise
-  reservePrice:  number;  // paise
-  gapAmount:     number;  // paise
+  bestBid:       number;
+  reservePrice:  number;
+  gapAmount:     number;
   gapPct:        number;
   onForceClose:  () => void;
   onExtend:      () => void;
@@ -44,62 +44,55 @@ export function ReserveNotMetModal({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={handleClose}
-      title="Reserve Price Not Met"
-      size="md"
-    >
-      {/* Alert */}
-      <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-        <p className="text-sm text-red-400">
-          The winning bid did not reach the minimum acceptable price.
+    <Modal open={open} onClose={handleClose} title="Reserve Price Not Met" size="md">
+      <div className="flex flex-col gap-4 pt-4">
+        {/* Alert */}
+        <div className="flex items-start gap-2.5 border border-danger/25 bg-danger/8 px-3 py-2.5 rounded-[4px]">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-danger" />
+          <p className="text-xs text-danger">
+            The winning bid did not reach the minimum acceptable price.
+          </p>
+        </div>
+
+        {/* Stat cells */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="border border-border-subtle bg-bg-elevated p-3 rounded-[4px]">
+            <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">Best Bid</p>
+            <p className="font-mono text-sm font-semibold text-text-primary">
+              {bestBid > 0 ? formatCurrency(bestBid) : '—'}
+            </p>
+          </div>
+          <div className="border border-border-subtle bg-bg-elevated p-3 rounded-[4px]">
+            <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">Reserve Price</p>
+            <p className="font-mono text-sm font-semibold text-text-primary">
+              {formatCurrency(reservePrice)}
+            </p>
+          </div>
+        </div>
+
+        {/* Shortfall */}
+        <p className="text-[11px] font-mono text-danger">
+          Shortfall: {formatCurrency(gapAmount)} ({gapPct.toFixed(1)}% below reserve)
         </p>
-      </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-lg bg-bg-elevated border border-border-subtle p-3">
-          <p className="text-[10px] uppercase tracking-wider text-text-muted mb-1">Best Bid</p>
-          <p className="font-mono text-base font-semibold text-text-primary">
-            {bestBid > 0 ? formatCurrency(bestBid) : '—'}
-          </p>
+        {/* Confirmation */}
+        {confirmingForceClose && (
+          <div className="border border-danger/25 bg-danger/8 px-3 py-2.5 rounded-[4px]">
+            <p className="text-xs text-danger">
+              This will award below the reserve price. Click again to confirm.
+            </p>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 pt-2 border-t border-border-subtle">
+          <Button variant="secondary" size="sm" onClick={onExtend}>
+            Extend Auction
+          </Button>
+          <Button variant="destructive" size="sm" onClick={handleForceCloseClick}>
+            {confirmingForceClose ? 'Yes, Force Close' : 'Force Close Anyway'}
+          </Button>
         </div>
-        <div className="rounded-lg bg-bg-elevated border border-border-subtle p-3">
-          <p className="text-[10px] uppercase tracking-wider text-text-muted mb-1">Reserve Price</p>
-          <p className="font-mono text-base font-semibold text-text-primary">
-            {formatCurrency(reservePrice)}
-          </p>
-        </div>
-      </div>
-
-      {/* Shortfall line */}
-      <p className="text-sm text-red-400">
-        Shortfall: {formatCurrency(gapAmount)} ({gapPct.toFixed(1)}% below reserve)
-      </p>
-
-      {/* Confirmation message */}
-      {confirmingForceClose && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
-          <p className="text-sm text-red-400">
-            This will award below the reserve price. Click again to confirm.
-          </p>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="flex justify-end gap-3 pt-1">
-        <Button variant="secondary" size="sm" onClick={onExtend}>
-          Extend Auction
-        </Button>
-        <Button
-          variant="danger"
-          size="sm"
-          onClick={handleForceCloseClick}
-        >
-          {confirmingForceClose ? 'Yes, Force Close' : 'Force Close Anyway'}
-        </Button>
       </div>
     </Modal>
   );
