@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { auctionsApi } from '@/lib/api';
@@ -37,7 +37,7 @@ function filterByTab(auctions: AuctionRow[], tab: TabKey): AuctionRow[] {
   }
 }
 
-export default function AuctionsListPage() {
+function AuctionsListPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const searchQuery  = searchParams.get('q') ?? '';
@@ -54,6 +54,7 @@ export default function AuctionsListPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   async function handleClone(id: string) {
@@ -81,12 +82,12 @@ export default function AuctionsListPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Auctions</h1>
-          <p className="mt-1 text-sm text-text-muted">Manage all your procurement auctions</p>
+          <h1 className="text-lg font-semibold text-text-primary">Auctions</h1>
+          <p className="mt-0.5 text-xs text-text-muted">Manage all your procurement auctions</p>
         </div>
         <Link href="/buyer/auctions/new">
-          <Button variant="primary" size="md">
-            <Plus size={14} />
+          <Button variant="default" size="md">
+            <Plus size={12} strokeWidth={2.5} />
             New Auction
           </Button>
         </Link>
@@ -94,9 +95,9 @@ export default function AuctionsListPage() {
 
       {/* Search result banner */}
       {searchQuery && (
-        <div className="flex items-center gap-2 text-xs text-text-muted">
+        <div className="flex items-center gap-2 text-xs text-text-muted border border-border-subtle bg-bg-elevated px-3 py-2 rounded-[4px]">
           <span>Results for <span className="text-text-primary font-medium">&ldquo;{searchQuery}&rdquo;</span> — {visible.length} found</span>
-          <Link href="/buyer/auctions" className="text-accent hover:underline ml-1">Clear</Link>
+          <Link href="/buyer/auctions" className="text-accent hover:underline ml-1 text-[11px]">Clear ×</Link>
         </div>
       )}
 
@@ -114,18 +115,18 @@ export default function AuctionsListPage() {
       {/* Grid */}
       {loading ? (
         <div className="py-16 flex justify-center">
-          <Spinner size={20} />
+          <Spinner size={18} />
         </div>
       ) : visible.length === 0 ? (
         <EmptyState
-          icon={<Gavel size={20} />}
+          icon={<Gavel size={16} />}
           title="No auctions here"
           description={tab === 'all' ? 'Create your first auction to get started.' : `No auctions with status "${tab}".`}
           action={
             tab === 'all' ? (
               <Link href="/buyer/auctions/new">
-                <Button variant="primary" size="sm">
-                  <Plus size={13} />
+                <Button variant="default" size="sm">
+                  <Plus size={12} strokeWidth={2.5} />
                   New Auction
                 </Button>
               </Link>
@@ -133,7 +134,7 @@ export default function AuctionsListPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-4">
           {visible.map((auction) => (
             <div key={auction.id} className="relative group">
               <AuctionCard
@@ -146,13 +147,13 @@ export default function AuctionsListPage() {
                   )
                 }
               />
-              {/* Clone button on hover */}
+              {/* Action buttons on hover */}
               <div className="absolute top-3 right-3 hidden group-hover:flex items-center gap-1">
                 {auction.status === AuctionStatus.DRAFT && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void handleDelete(auction.id); }}
-                    className="flex items-center gap-1 text-[10px] text-danger bg-danger/10 border border-danger/20 rounded px-2 py-1 hover:bg-danger/20 transition-colors"
+                    className="text-[9px] font-medium uppercase tracking-wider text-danger bg-danger/10 border border-danger/20 rounded-[2px] px-2 py-1 hover:bg-danger/20 transition-colors duration-150"
                   >
                     Delete
                   </button>
@@ -160,7 +161,7 @@ export default function AuctionsListPage() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); void handleClone(auction.id); }}
-                  className="flex items-center gap-1 text-[10px] text-text-muted bg-bg-elevated border border-border-default rounded px-2 py-1 hover:text-text-primary transition-colors"
+                  className="text-[9px] font-medium uppercase tracking-wider text-text-muted bg-bg-elevated border border-border-default rounded-[2px] px-2 py-1 hover:text-text-primary transition-colors duration-150"
                 >
                   Clone
                 </button>
@@ -170,5 +171,13 @@ export default function AuctionsListPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AuctionsPage() {
+  return (
+    <Suspense fallback={<FullPageSpinner />}>
+      <AuctionsListPage />
+    </Suspense>
   );
 }

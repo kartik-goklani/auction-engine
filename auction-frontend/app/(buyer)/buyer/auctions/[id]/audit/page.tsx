@@ -103,12 +103,12 @@ export default function AuditTrailPage() {
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link href={`/buyer/auctions/${id}`}>
-            <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-              <ArrowLeft size={16} />
+            <button type="button" className="p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+              <ArrowLeft size={14} />
             </button>
           </Link>
           <div>
-            <h1 className="text-lg font-bold text-text-primary">Audit Trail</h1>
+            <h1 className="text-base font-semibold tracking-tight text-text-primary">Audit Trail</h1>
             <p className="text-xs text-text-muted mt-0.5">{auction.title}</p>
           </div>
         </div>
@@ -118,17 +118,17 @@ export default function AuditTrailPage() {
         </Button>
       </div>
 
-      {/* Actor filter pills */}
+      {/* Actor filter chips */}
       <div className="flex items-center gap-2">
         {(['all', ActorType.BUYER, ActorType.VENDOR, ActorType.SYSTEM] as const).map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setActorFilter(f)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            className={`px-2.5 py-1 rounded-[3px] text-[10px] font-medium uppercase tracking-wide transition-colors ${
               actorFilter === f
                 ? 'bg-bg-elevated text-text-primary border border-border-default'
-                : 'text-text-muted hover:text-text-secondary'
+                : 'text-text-muted hover:text-text-primary border border-transparent'
             }`}
           >
             {f === 'all' ? 'All' : f}

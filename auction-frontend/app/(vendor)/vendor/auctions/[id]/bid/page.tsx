@@ -19,11 +19,10 @@ import { BidInput } from '@/components/bid/BidInput';
 import { RankBadge } from '@/components/bid/RankBadge';
 import { TrafficLightBadge } from '@/components/bid/TrafficLightBadge';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { formatCurrency } from '@/lib/utils';
-import { ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -41,7 +40,7 @@ export default function VendorBidPage() {
   const [rankInfo,     setRankInfo]     = useState<YourRankPayload | null>(null);
   const [totalVendors, setTotalVendors] = useState<number>(0);
   const [toast,        setToast]        = useState<Toast | null>(null);
-  const [outbid,       setOutbid]       = useState(false);
+  const [isOutbid,     setIsOutbid]     = useState(false);
   const [accessModalOpen, setAccessModalOpen] = useState(false);
   const [responding,   setResponding]   = useState(false);
   const [loading,      setLoading]      = useState(true);
@@ -73,7 +72,6 @@ export default function VendorBidPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  // Resolve current vendor id from Supabase token claims
   useEffect(() => {
     getAccessToken().then((token) => {
       if (!token) return;
@@ -84,7 +82,6 @@ export default function VendorBidPage() {
     });
   }, []);
 
-  // Socket lifecycle
   useEffect(() => {
     if (!vendorId || invitation?.status !== InvitationStatus.ACCEPTED) return;
 
@@ -96,15 +93,10 @@ export default function VendorBidPage() {
 
       joinAuction(id, vendorId);
 
-      const offBidAccepted = onBidAccepted((p) => {
-        setCurrentBest(p.currentBestAmount ?? null);
-        setOutbid(false);
-      });
-      const offBidRejected = onBidRejected((p) => {
-        showToast(`Bid rejected: ${p.reason}`, 'error');
-      });
+      const offBidAccepted  = onBidAccepted((p) => { setCurrentBest(p.currentBestAmount ?? null); setIsOutbid(false); });
+      const offBidRejected  = onBidRejected((p) => { showToast(`Bid rejected: ${p.reason}`, 'error'); });
       const offBidConfirmed = onBidConfirmed((p) => {
-        showToast(`Bid ${formatCurrency(p.amount)} confirmed!`, 'success');
+        showToast(`Bid ${formatCurrency(p.amount)} confirmed`, 'success');
         if (p.traffic_light) setTrafficLight(p.traffic_light);
       });
       const offYourRank = onYourRank((p) => {
@@ -113,73 +105,42 @@ export default function VendorBidPage() {
         if (p.traffic_light) setTrafficLight(p.traffic_light);
       });
       const offOutbid = onOutbid((p) => {
-        setOutbid(true);
+        setIsOutbid(true);
         setCurrentBest(p.currentBestAmount);
-        showToast(`You were outbid! New best: ${formatCurrency(p.currentBestAmount)}`, 'info');
+        showToast(`Outbid — new best: ${formatCurrency(p.currentBestAmount)}`, 'info');
       });
-      const offExtended = onAuctionExtended((p) => {
+      const offExtended  = onAuctionExtended((p) => {
         setAuction((prev) => prev ? { ...prev, end_time: p.newEndTime } : prev);
-        showToast(`Auction extended by ${p.extensionMinutes} minutes`, 'info');
+        showToast(`Auction extended by ${p.extensionMinutes} min`, 'info');
       });
-      const offClosed = onAuctionClosed(() => {
-        showToast('Auction closed! Redirecting to results…', 'info');
+      const offClosed    = onAuctionClosed(() => {
+        showToast('Auction closed — redirecting to results…', 'info');
         setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3000);
       });
-      const offPaused = onAuctionPaused((p) => {
-        setIsPaused(true);
-        setPauseReason(p.reason);
-      });
-      const offResumed = onAuctionResumed(() => {
-        setIsPaused(false);
-        setPauseReason(undefined);
-        showToast('Auction has resumed — bidding is live again', 'info');
-      });
-
-      const offAwarded = onAuctionAwarded(() => {
-        showToast('Auction awarded. Redirecting to results…', 'info');
-        setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3_000);
-      });
-
-      const offCancelled = onAuctionCancelled(() => {
-        showToast('This auction has been cancelled.', 'info');
-        setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3_000);
-      });
-
-      const offReconnect = onReconnect(() => {
-        joinAuction(id, vendorId);
-        void load();
-      });
+      const offPaused    = onAuctionPaused((p) => { setIsPaused(true); setPauseReason(p.reason); });
+      const offResumed   = onAuctionResumed(() => { setIsPaused(false); setPauseReason(undefined); showToast('Auction resumed', 'info'); });
+      const offAwarded   = onAuctionAwarded(() => { showToast('Auction awarded — redirecting…', 'info'); setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3_000); });
+      const offCancelled = onAuctionCancelled(() => { showToast('Auction cancelled', 'info'); setTimeout(() => router.push(`/vendor/auctions/${id}/results`), 3_000); });
+      const offReconnect = onReconnect(() => { joinAuction(id, vendorId); void load(); });
 
       cleanup = () => {
-        offBidAccepted();
-        offBidRejected();
-        offBidConfirmed();
-        offYourRank();
-        offOutbid();
-        offExtended();
-        offClosed();
-        offPaused();
-        offResumed();
-        offAwarded();
-        offCancelled();
-        offReconnect();
+        offBidAccepted(); offBidRejected(); offBidConfirmed();
+        offYourRank(); offOutbid(); offExtended(); offClosed();
+        offPaused(); offResumed(); offAwarded(); offCancelled(); offReconnect();
         leaveAuction(id);
       };
     });
 
-    return () => {
-      cancelled = true;
-      cleanup?.();
-    };
+    return () => { cancelled = true; cleanup?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, invitation?.status, router, vendorId]);
 
   async function handleAcceptInvitation() {
     if (!invitation) return;
-
     setResponding(true);
     try {
-      const updatedInvitation = await invitationsApi.respond(invitation.id, 'ACCEPTED');
-      setInvitation(updatedInvitation);
+      const updated = await invitationsApi.respond(invitation.id, 'ACCEPTED');
+      setInvitation(updated);
       setAccessModalOpen(false);
     } finally {
       setResponding(false);
@@ -197,125 +158,150 @@ export default function VendorBidPage() {
   const showPrice  = !isSealed && auction.visibility === AuctionVisibility.PRICE;
   const showTrafficLight = !isSealed && auction.traffic_light_enabled;
   const direction  = auction.type === AuctionType.FORWARD ? 'FORWARD' : 'REVERSE';
-  const canJoinAuction = invitation?.status === InvitationStatus.ACCEPTED;
+  const canBid     = invitation?.status === InvitationStatus.ACCEPTED;
 
   return (
-    <div className="flex flex-col gap-5 max-w-xl">
-      {/* Header */}
+    <div className="flex flex-col gap-5">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <Link href={`/vendor/auctions/${id}`}>
-          <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-            <ArrowLeft size={16} />
+          <button
+            type="button"
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-[3px] transition-colors duration-150"
+          >
+            <ArrowLeft size={14} />
           </button>
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="truncate text-lg font-bold text-text-primary">{auction.title}</h1>
+            <h1 className="truncate text-base font-semibold text-text-primary tracking-tight">
+              {auction.title}
+            </h1>
             <AuctionStatusBadge status={auction.status} pulse />
           </div>
         </div>
       </div>
 
-      {/* Paused banner */}
+      {/* ── Pause banner ─────────────────────────────────────────────────── */}
       {isPaused && <AuctionPausedVendorBanner reason={pauseReason} />}
 
-      {/* Outbid banner */}
-      {outbid && !isPaused && (
-        <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
-          <AlertCircle size={14} className="text-warning shrink-0" />
-          <p className="text-xs font-medium text-warning">You have been outbid!</p>
+      {/* ── Outbid alert ─────────────────────────────────────────────────── */}
+      {isOutbid && !isPaused && (
+        <div className="flex items-center gap-2.5 border border-warning/30 bg-warning/8 px-4 py-3 rounded-[4px] border-l-2 border-l-warning">
+          <AlertTriangle size={13} className="text-warning shrink-0" />
+          <p className="text-xs font-semibold text-warning">You have been outbid — submit a new bid to stay competitive</p>
         </div>
       )}
 
-      {/* Toast */}
+      {/* ── Sealed bid note ──────────────────────────────────────────────── */}
+      {isSealed && (
+        <div className="flex items-start gap-2.5 border border-info/25 bg-info/5 px-4 py-3 rounded-[4px] border-l-2 border-l-info">
+          <Info size={13} className="text-info shrink-0 mt-0.5" />
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Sealed bid — your offer is confidential. You may submit once.
+            Results revealed when the auction closes.
+          </p>
+        </div>
+      )}
+
+      {/* ── Live zone: metrics left, bid input right ─────────────────────── */}
+      <div className="border border-border-default bg-bg-card rounded-[4px] border-l-2 border-l-accent overflow-hidden">
+        <div className="grid grid-cols-[1fr_auto] divide-x divide-border-subtle">
+
+          {/* Left column: metrics */}
+          <div className="flex flex-col divide-y divide-border-subtle">
+
+            {/* Time + price row */}
+            <div className="grid grid-cols-2 divide-x divide-border-subtle">
+              {auction.end_time && (
+                <div className="px-5 py-4">
+                  <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">Time Left</p>
+                  <AuctionTimer
+                    endTime={auction.end_time}
+                    onExpire={() => void load()}
+                    className="font-mono text-xl font-semibold text-text-primary"
+                  />
+                </div>
+              )}
+              {showPrice && currentBest != null && (
+                <div className="px-5 py-4">
+                  <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">Current Best</p>
+                  <p className="font-mono text-xl font-semibold text-accent">{formatCurrency(currentBest)}</p>
+                </div>
+              )}
+              {(!auction.end_time || (!showPrice || currentBest == null)) && (
+                <div className="px-5 py-4 text-xs text-text-muted italic">
+                  {!auction.end_time && 'No end time set'}
+                </div>
+              )}
+            </div>
+
+            {/* Rank + traffic light row */}
+            {showRank && (
+              <div className="flex items-center gap-6 px-5 py-4">
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">Your Rank</p>
+                  <RankBadge
+                    rank={rankInfo?.rank ?? null}
+                    totalBidders={rankInfo?.totalActiveBidders ?? totalVendors}
+                  />
+                </div>
+                {showTrafficLight && (
+                  <TrafficLightBadge
+                    status={trafficLight}
+                    greenPct={auction.traffic_light_green_pct}
+                    yellowPct={auction.traffic_light_yellow_pct}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right column: bid input */}
+          <div className="w-80 shrink-0 px-5 py-4 flex flex-col justify-center">
+            <p className="text-[9px] uppercase tracking-widest text-text-muted mb-3 font-semibold">Place Bid</p>
+            {canBid ? (
+              <div className={cn(isPaused && 'pointer-events-none opacity-50')}>
+                <BidInput
+                  currentBestAmount={showPrice ? currentBest : null}
+                  minDecrement={auction.min_decrement ?? 0}
+                  direction={direction}
+                  onSubmit={handleBidSubmit}
+                />
+                {isPaused && (
+                  <p className="mt-2 text-xs text-warning">Bidding is currently suspended.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-text-secondary">
+                Accept the invitation to enter this live bidding room.
+              </p>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Toast ────────────────────────────────────────────────────────── */}
       {toast && (
         <div
           className={cn(
-            'fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.50)] transition-all duration-300',
+            'fixed bottom-6 right-6 z-50 flex items-center gap-2.5 border px-4 py-3 rounded-[4px]',
+            'shadow-[0_8px_24px_rgba(0,0,0,0.60)] animate-ticker-in',
             toast.kind === 'success' && 'border-success/30 bg-success/10 text-success',
             toast.kind === 'error'   && 'border-danger/30  bg-danger/10  text-danger',
             toast.kind === 'info'    && 'border-border-default bg-bg-elevated text-text-primary',
           )}
         >
           {toast.kind === 'success' && <CheckCircle2 size={14} className="shrink-0" />}
-          {toast.kind === 'error'   && <AlertCircle  size={14} className="shrink-0" />}
+          {toast.kind === 'error'   && <AlertTriangle size={14} className="shrink-0" />}
+          {toast.kind === 'info'    && <Info size={14} className="shrink-0" />}
           <p className="text-xs font-medium">{toast.message}</p>
         </div>
       )}
 
-      {/* Metrics row */}
-      <div className="grid grid-cols-2 gap-3">
-        {auction.end_time && (
-          <Card className="flex flex-col gap-1">
-            <p className="text-[10px] uppercase tracking-wider text-text-muted">Time Left</p>
-            <AuctionTimer
-              endTime={auction.end_time}
-              onExpire={() => void load()}
-              className="text-lg"
-            />
-          </Card>
-        )}
-        {showPrice && currentBest != null && (
-          <Card className="flex flex-col gap-1">
-            <p className="text-[10px] uppercase tracking-wider text-text-muted">Current Best</p>
-            <p className="font-mono text-lg font-bold text-success">{formatCurrency(currentBest)}</p>
-          </Card>
-        )}
-      </div>
-
-      {/* Rank + traffic light */}
-      {showRank && (
-        <Card className="flex items-center gap-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-text-muted mb-1">Your Rank</p>
-            <RankBadge
-              rank={rankInfo?.rank ?? null}
-              totalBidders={rankInfo?.totalActiveBidders ?? totalVendors}
-            />
-          </div>
-          {showTrafficLight && (
-            <div className="ml-auto">
-              <TrafficLightBadge
-                status={trafficLight}
-                greenPct={auction.traffic_light_green_pct}
-                yellowPct={auction.traffic_light_yellow_pct}
-              />
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Sealed bid note */}
-      {isSealed && (
-        <div className="rounded-lg border border-border-default bg-bg-elevated px-4 py-3">
-          <p className="text-xs text-text-secondary">
-            Sealed bid: your offer is confidential. You may submit once. Results revealed on close.
-          </p>
-        </div>
-      )}
-
-      {/* Bid input */}
-      <Card>
-        <h2 className="text-sm font-semibold text-text-primary mb-4">Place Your Bid</h2>
-        {canJoinAuction ? (
-          <div className={cn(isPaused && 'pointer-events-none opacity-50')}>
-            <BidInput
-              currentBestAmount={showPrice ? currentBest : null}
-              minDecrement={auction.min_decrement ?? 0}
-              direction={direction}
-              onSubmit={handleBidSubmit}
-            />
-            {isPaused && (
-              <p className="mt-2 text-xs text-amber-600">Bidding is currently suspended</p>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-text-secondary">
-            Accept the invitation to join this live bidding room.
-          </p>
-        )}
-      </Card>
-
+      {/* ── Access modal ─────────────────────────────────────────────────── */}
       <Modal
         open={accessModalOpen}
         onClose={() => router.replace(`/vendor/auctions/${id}`)}
@@ -329,19 +315,18 @@ export default function VendorBidPage() {
               ? 'Accept this auction invitation now to enter the live bidding room.'
               : 'This auction is not available for live bidding with your current invitation status.'}
           </p>
-
           <div className="flex items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => router.replace(`/vendor/auctions/${id}`)}>
               Back to Auction
             </Button>
             {invitation?.status === InvitationStatus.INVITED && (
               <Button
-                variant="primary"
+                variant="default"
                 size="sm"
                 loading={responding}
                 onClick={() => void handleAcceptInvitation()}
               >
-                Accept Invitation
+                Accept &amp; Enter
               </Button>
             )}
           </div>

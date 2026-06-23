@@ -113,12 +113,12 @@ export default function AuctionResultsPage() {
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href={`/buyer/auctions/${id}`} className="inline-flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-          <ArrowLeft size={16} />
+        <Link href={`/buyer/auctions/${id}`} className="inline-flex items-center justify-center p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+          <ArrowLeft size={14} />
         </Link>
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-lg font-bold text-text-primary">{auction.title}</h1>
+            <h1 className="text-base font-semibold tracking-tight text-text-primary">{auction.title}</h1>
             <AuctionStatusBadge status={auction.status} />
           </div>
           <p className="mt-0.5 text-xs text-text-muted">
@@ -129,10 +129,10 @@ export default function AuctionResultsPage() {
 
       {/* Reserve not met banner */}
       {isReserveNotMet && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 flex flex-col gap-3">
+        <div className="rounded-[4px] border border-danger/30 bg-danger/8 p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 shrink-0 text-red-400" />
-            <p className="font-semibold text-red-400">Reserve price was not met</p>
+            <AlertTriangle className="h-4 w-4 shrink-0 text-danger" />
+            <p className="text-sm font-semibold text-danger">Reserve price was not met</p>
           </div>
           <p className="text-sm text-text-muted">
             The auction closed with bids below the minimum acceptable price.
@@ -170,9 +170,9 @@ export default function AuctionResultsPage() {
           { label: 'Winning Bid',  value: bestBid ? formatCurrency(bestBid.amount) : '—'                },
           { label: 'Unique Vendors', value: new Set(bids.map((b) => b.vendor_id)).size.toString()       },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-[10px] bg-bg-card border border-border-subtle p-4">
-            <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
-            <p className="mt-1 font-mono text-xl font-bold text-text-primary">{value}</p>
+          <div key={label} className="rounded-[4px] bg-bg-card border border-border-subtle border-l-2 border-l-border-default p-4">
+            <p className="text-[10px] uppercase tracking-widest font-semibold text-text-muted">{label}</p>
+            <p className="mt-1 font-mono text-lg font-bold text-text-primary">{value}</p>
           </div>
         ))}
       </div>
@@ -235,7 +235,7 @@ export default function AuctionResultsPage() {
               return (
                 <div
                   key={vendorId}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-bg-card px-4 py-3"
+                  className="flex items-center justify-between gap-3 rounded-[4px] border border-border-subtle bg-bg-card px-4 py-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-[10px] font-mono text-text-muted w-5 shrink-0">
@@ -245,7 +245,7 @@ export default function AuctionResultsPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-text-primary truncate">{name}</span>
                         {isAiPick && (
-                          <span className="text-[10px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+                          <span className="text-[9px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded-[2px] uppercase tracking-wide border border-border-accent">
                             AI Pick
                           </span>
                         )}

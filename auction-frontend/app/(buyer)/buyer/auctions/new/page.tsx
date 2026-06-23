@@ -279,12 +279,12 @@ export default function NewAuctionPage() {
     <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-          <ArrowLeft size={16} />
+        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+          <ArrowLeft size={14} />
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-text-primary">New Auction</h1>
-          <p className="text-sm text-text-muted">Configure your procurement event</p>
+          <h1 className="text-base font-semibold tracking-tight text-text-primary">New Auction</h1>
+          <p className="text-xs text-text-muted">Configure your procurement event</p>
         </div>
       </div>
 
@@ -301,7 +301,7 @@ export default function NewAuctionPage() {
               required
             />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Description</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Description</label>
               <Textarea
                 value={form.description}
                 onChange={(e) => patch({ description: e.target.value })}
@@ -324,7 +324,7 @@ export default function NewAuctionPage() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Key Specs</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Key Specs</label>
               <Textarea
                 value={form.keySpecs}
                 onChange={(e) => patch({ keySpecs: e.target.value })}
@@ -335,9 +335,8 @@ export default function NewAuctionPage() {
 
             {/* Category dropdown */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">
-                Category
-                <span className="text-muted-foreground font-normal ml-1">— used by AI for price suggestions</span>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                Category <span className="normal-case font-normal ml-0.5">— used by AI for price suggestions</span>
               </label>
               <Select
                 value={form.categoryKey}
@@ -388,7 +387,7 @@ export default function NewAuctionPage() {
           <h2 className="text-sm font-semibold text-text-primary mb-4">Auction Configuration</h2>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Auction Type</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Auction Type</label>
               <Select
                 value={form.auctionType}
                 onValueChange={(v) => { if (v) patch({ auctionType: v as AuctionType, ...(v === AuctionType.FORWARD ? { riskThresholdRupees: '' } : {}) }); }}
@@ -404,7 +403,7 @@ export default function NewAuctionPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Visibility</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Visibility</label>
               <Select
                 value={form.visibility}
                 onValueChange={(v) => { if (v) patch({ visibility: v as AuctionVisibility }); }}
@@ -563,7 +562,7 @@ export default function NewAuctionPage() {
               )}
               {aiSuggestion?.reserve_confidence === null &&
                 aiSuggestion?.reserve_price_basis === 'insufficient_evidence' && (
-                <p className="text-xs text-amber-600">
+                <p className="text-xs text-warning">
                   Insufficient data to suggest a reserve price. Set manually.
                 </p>
               )}
@@ -634,20 +633,20 @@ export default function NewAuctionPage() {
                 </div>
 
                 {/* Live preview */}
-                <div className="flex items-center gap-4 rounded-lg border border-border-default bg-bg-elevated px-4 py-2.5 text-xs">
+                <div className="flex items-center gap-4 rounded-[4px] border border-border-subtle bg-bg-elevated px-4 py-2.5 text-xs">
                   <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-green-700 font-medium">Competitive</span>
+                    <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                    <span className="text-success font-medium">Competitive</span>
                     <span className="text-text-muted ml-1">within {form.trafficLightGreenPct || '?'}%</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                    <span className="text-amber-700 font-medium">Marginal</span>
+                    <span className="h-2 w-2 rounded-full bg-warning" />
+                    <span className="text-warning font-medium">Marginal</span>
                     <span className="text-text-muted ml-1">{form.trafficLightGreenPct || '?'}–{form.trafficLightYellowPct || '?'}%</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                    <span className="text-red-700 font-medium">Not competitive</span>
+                    <span className="h-2 w-2 rounded-full bg-danger" />
+                    <span className="text-danger font-medium">Not competitive</span>
                     <span className="text-text-muted ml-1">above {form.trafficLightYellowPct || '?'}%</span>
                   </span>
                 </div>
@@ -680,7 +679,7 @@ export default function NewAuctionPage() {
         </Card>
 
         {error && (
-          <p className="text-xs text-danger bg-danger/5 border border-danger/25 rounded-lg px-4 py-2.5">
+          <p className="text-xs text-danger bg-danger/8 border border-danger/25 rounded-[4px] px-4 py-2.5">
             {error}
           </p>
         )}

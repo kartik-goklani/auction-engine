@@ -151,6 +151,7 @@ export default function BuyerLivePage() {
       cancelled = true;
       cleanup?.();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, router]);
 
   async function handleExtend() {
@@ -228,13 +229,13 @@ export default function BuyerLivePage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <Link href={`/buyer/auctions/${id}`}>
-            <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-              <ArrowLeft size={16} />
+            <button type="button" className="p-1.5 text-text-muted hover:text-text-primary transition-colors duration-150">
+              <ArrowLeft size={14} />
             </button>
           </Link>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-bold text-text-primary truncate">{auction.title}</h1>
+              <h1 className="text-base font-semibold text-text-primary tracking-tight truncate">{auction.title}</h1>
               <AuctionStatusBadge status={auction.status} pulse />
             </div>
           </div>
@@ -252,19 +253,19 @@ export default function BuyerLivePage() {
                 size="sm"
                 loading={pausing}
                 onClick={() => setPauseModalOpen(true)}
-                className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                className="border-warning/40 text-warning hover:bg-warning/10"
               >
-                <Pause size={13} />
+                <Pause size={12} />
                 Pause
               </Button>
             </>
           ) : (
-            <Button variant="secondary" size="sm" loading={resuming} onClick={handleResume} className="border-green-300 text-green-700 hover:bg-green-50">
-              <Play size={13} />
+            <Button variant="secondary" size="sm" loading={resuming} onClick={handleResume} className="border-success/40 text-success hover:bg-success/10">
+              <Play size={12} />
               Resume
             </Button>
           )}
-          <Button variant="danger" size="sm" loading={closing} onClick={handleCloseNow}>
+          <Button variant="destructive" size="sm" loading={closing} onClick={handleCloseNow}>
             <X size={13} />
             Close Now
           </Button>
@@ -280,34 +281,34 @@ export default function BuyerLivePage() {
         />
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="flex flex-col gap-2">
-          <p className="text-[10px] uppercase tracking-wider text-text-muted">Current Best</p>
-          <p className="font-mono text-3xl font-bold text-success leading-none">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px] border-l-2 border-l-accent">
+          <p className="text-[9px] uppercase tracking-widest text-text-muted mb-2">Current Best</p>
+          <p className="font-mono text-2xl font-semibold text-accent leading-none">
             {currentBest != null ? formatCurrency(currentBest) : '—'}
           </p>
-        </Card>
+        </div>
         {auction.end_time && (
-          <Card className="flex flex-col gap-2">
-            <p className="text-[10px] uppercase tracking-wider text-text-muted">Time Remaining</p>
-            <AuctionTimer endTime={auction.end_time} className="text-xl" />
-          </Card>
+          <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px]">
+            <p className="text-[9px] uppercase tracking-widest text-text-muted mb-2">Time Left</p>
+            <AuctionTimer endTime={auction.end_time} className="text-xl font-mono" />
+          </div>
         )}
-        <Card className="flex flex-col gap-2">
-          <p className="text-[10px] uppercase tracking-wider text-text-muted">Total Bids</p>
-          <p className="font-mono text-2xl font-bold text-text-primary">{bids.length}</p>
-        </Card>
-        <Card className="flex flex-col gap-2">
-          <p className="text-[10px] uppercase tracking-wider text-text-muted">Vendors Connected</p>
-          <p className="font-mono text-2xl font-bold text-text-primary">{vendorCount}</p>
-        </Card>
+        <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px]">
+          <p className="text-[9px] uppercase tracking-widest text-text-muted mb-2">Total Bids</p>
+          <p className="font-mono text-2xl font-semibold text-text-primary">{bids.length}</p>
+        </div>
+        <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px]">
+          <p className="text-[9px] uppercase tracking-widest text-text-muted mb-2">Vendors</p>
+          <p className="font-mono text-2xl font-semibold text-text-primary">{vendorCount}</p>
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Card>
+        <Card padding="md">
           <div className="flex items-center gap-2 mb-3">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-            <h2 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Price Trend</h2>
+            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-amber-pulse" />
+            <h2 className="text-[10px] font-semibold text-text-primary uppercase tracking-widest">Price Trend</h2>
           </div>
           <BidTrendChart
             bids={bids}
@@ -323,9 +324,9 @@ export default function BuyerLivePage() {
           />
         </Card>
 
-        <Card className="flex flex-col gap-3">
-          <p className="text-xs font-semibold text-text-primary flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+        <Card padding="md" className="flex flex-col gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-text-primary flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-success animate-amber-pulse" />
             Live Bid Feed
           </p>
           <LiveBidFeed bids={bids} className="max-h-[420px]" />
@@ -334,8 +335,8 @@ export default function BuyerLivePage() {
 
       {/* Agent traces */}
       {agentRuns.length > 0 && (
-        <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-4">Agent Activity</h2>
+        <Card padding="md">
+          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-text-primary mb-4">Agent Activity</h2>
           <AgentTraceViewer runs={agentRuns} />
         </Card>
       )}

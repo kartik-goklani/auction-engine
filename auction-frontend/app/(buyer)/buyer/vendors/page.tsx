@@ -35,8 +35,8 @@ export default function VendorsPage() {
     <div className="flex flex-col gap-6 w-full">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Vendor Directory</h1>
-          <p className="mt-1 text-sm text-text-muted">{vendors.length} vendors registered</p>
+          <h1 className="text-base font-semibold tracking-tight text-text-primary">Vendor Directory</h1>
+          <p className="mt-0.5 text-xs text-text-muted">{vendors.length} vendors registered</p>
         </div>
       </div>
 
@@ -46,7 +46,7 @@ export default function VendorsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search vendors…"
-          className="w-full bg-bg-input text-text-primary text-sm pl-9 pr-4 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+          className="w-full bg-bg-input text-text-primary text-sm pl-9 pr-4 py-2 rounded-[4px] border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
         />
       </div>
 
@@ -66,7 +66,7 @@ export default function VendorsPage() {
               className="flex flex-col gap-3"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg-elevated border border-border-subtle">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] bg-bg-elevated border border-border-subtle">
                   <Building2 size={15} className="text-text-muted" />
                 </div>
                 <div className="min-w-0">

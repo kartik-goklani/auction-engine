@@ -12,9 +12,10 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { Tabs } from '@/components/ui/Tabs';
-import { Gavel, Calendar, ChevronRight } from 'lucide-react';
+import { Gavel, Calendar, ChevronRight, Zap } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useNotifications } from '@/components/ui/NotificationProvider';
+import { cn } from '@/lib/utils';
 
 type FilterTab = 'all' | 'pending' | 'accepted' | 'closed';
 
@@ -66,19 +67,18 @@ function VendorAuctionsContent() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [notificationVersion]);
 
-  const allFiltered = items.filter(({ auction, invitation }) => {
-    if (tab === 'all') return true;
-    if (tab === 'pending')  return invitation.status === InvitationStatus.INVITED;
-    if (tab === 'accepted') return invitation.status === InvitationStatus.ACCEPTED;
-    if (tab === 'closed')   return auction.status === AuctionStatus.CLOSED || auction.status === AuctionStatus.AWARDED;
+  const filterFn = (id: FilterTab) => ({ auction, invitation }: AuctionWithInvitation) => {
+    if (id === 'all')      return true;
+    if (id === 'pending')  return invitation.status === InvitationStatus.INVITED;
+    if (id === 'accepted') return invitation.status === InvitationStatus.ACCEPTED;
+    if (id === 'closed')   return auction.status === AuctionStatus.CLOSED || auction.status === AuctionStatus.AWARDED;
     return true;
-  });
+  };
 
+  const allFiltered = items.filter(filterFn(tab));
   const filtered = searchQuery
     ? allFiltered.filter(({ auction }) =>
         auction.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -86,26 +86,38 @@ function VendorAuctionsContent() {
       )
     : allFiltered;
 
+  const liveCount = items.filter(({ auction, invitation }) =>
+    auction.status === AuctionStatus.OPEN && invitation.status === InvitationStatus.ACCEPTED,
+  ).length;
+
   if (loading) return <FullPageSpinner />;
 
   return (
     <div className="flex flex-col gap-6">
+
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-text-primary">My Auctions</h1>
-        <p className="mt-1 text-sm text-text-muted">{items.length} auction invitation{items.length !== 1 ? 's' : ''}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight text-text-primary">My Auctions</h1>
+          <p className="mt-0.5 text-xs text-text-muted">
+            {items.length} invitation{items.length !== 1 ? 's' : ''}
+            {searchQuery && ` · filtered by "${searchQuery}"`}
+          </p>
+        </div>
+        {liveCount > 0 && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-success/8 border border-success/25 rounded-[4px]">
+            <span className="h-1.5 w-1.5 rounded-full bg-success animate-amber-pulse" />
+            <span className="text-[10px] font-semibold text-success uppercase tracking-wider">
+              {liveCount} Live
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
       <Tabs<FilterTab>
         tabs={TABS.map(({ id, label }) => {
-          const count = items.filter(({ auction, invitation }) => {
-            if (id === 'all')      return true;
-            if (id === 'pending')  return invitation.status === InvitationStatus.INVITED;
-            if (id === 'accepted') return invitation.status === InvitationStatus.ACCEPTED;
-            if (id === 'closed')   return auction.status === AuctionStatus.CLOSED || auction.status === AuctionStatus.AWARDED;
-            return true;
-          }).length;
+          const count = items.filter(filterFn(id)).length;
           return { id, label, badge: count > 0 ? count : undefined };
         })}
         active={tab}
@@ -120,51 +132,66 @@ function VendorAuctionsContent() {
           description={tab === 'all' ? 'You have no auction invitations yet.' : `No ${tab} auctions.`}
         />
       ) : (
-        <div className="grid grid-cols-2 gap-4">
-          {filtered.map(({ auction, invitation }) => (
-            <button
-              key={invitation.id}
-              type="button"
-              onClick={() => router.push(`/vendor/auctions/${auction.id}`)}
-              className="text-left rounded-[16px] bg-bg-card border border-border-subtle p-4 flex flex-col gap-3 hover:border-accent/30 hover:shadow-[0_0_14px_rgba(59,130,246,0.10)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
-            >
-              {/* Top row */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Gavel size={14} className="text-text-muted shrink-0 mt-0.5" />
-                  <p className="text-sm font-semibold text-text-primary truncate">{auction.title}</p>
+        <div className="grid grid-cols-3 gap-3">
+          {filtered.map(({ auction, invitation }) => {
+            const isPending = invitation.status === InvitationStatus.INVITED;
+            const isLive    = auction.status === AuctionStatus.OPEN;
+            const isClosed  = auction.status === AuctionStatus.CLOSED || auction.status === AuctionStatus.AWARDED;
+
+            return (
+              <button
+                key={invitation.id}
+                type="button"
+                onClick={() => router.push(`/vendor/auctions/${auction.id}`)}
+                className={cn(
+                  'text-left rounded-[4px] bg-bg-card border border-border-subtle border-l-2 p-4 flex flex-col gap-3',
+                  'hover:bg-bg-card-hover transition-colors duration-150 cursor-pointer',
+                  isPending ? 'border-l-warning' :
+                  isLive    ? 'border-l-success'  :
+                  isClosed  ? 'border-l-border-default' :
+                  'border-l-accent',
+                )}
+              >
+                {/* Title row */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <div className={cn(
+                      'mt-0.5 shrink-0 flex h-6 w-6 items-center justify-center rounded-[3px] border',
+                      isLive    ? 'border-success/25 bg-success/8 text-success' :
+                      isPending ? 'border-warning/25 bg-warning/8 text-warning' :
+                      'border-border-subtle bg-bg-elevated text-text-muted',
+                    )}>
+                      {isLive ? <Zap size={11} /> : <Gavel size={11} />}
+                    </div>
+                    <p className="text-sm font-semibold text-text-primary leading-tight">{auction.title}</p>
+                  </div>
+                  <ChevronRight size={13} className="text-text-muted shrink-0 mt-0.5" />
                 </div>
-                <ChevronRight size={14} className="text-text-muted shrink-0" />
-              </div>
 
-              {/* Tags */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <AuctionStatusBadge status={auction.status} />
-                <AuctionTypeTag type={auction.type} />
-                {invitation.status === InvitationStatus.INVITED && (
-                  <Badge variant="warning" size="sm">Pending Response</Badge>
-                )}
-                {invitation.status === InvitationStatus.ACCEPTED && (
-                  <Badge variant="success" size="sm">Accepted</Badge>
-                )}
-                {invitation.status === InvitationStatus.DECLINED && (
-                  <Badge variant="default" size="sm">Declined</Badge>
-                )}
-              </div>
+                {/* Status badges */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <AuctionStatusBadge status={auction.status} pulse={isLive} />
+                  <AuctionTypeTag type={auction.type} />
+                  {isPending && <Badge variant="warning" size="sm">Awaiting Response</Badge>}
+                  {invitation.status === InvitationStatus.DECLINED && (
+                    <Badge variant="default" size="sm">Declined</Badge>
+                  )}
+                </div>
 
-              {/* Dates */}
-              <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
-                <Calendar size={10} />
-                <span>Invited {formatDate(invitation.invited_at)}</span>
-                {auction.end_time && (
-                  <>
-                    <span className="opacity-40">·</span>
-                    <span>Ends {formatDate(auction.end_time)}</span>
-                  </>
-                )}
-              </div>
-            </button>
-          ))}
+                {/* Dates */}
+                <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
+                  <Calendar size={9} />
+                  <span>Invited {formatDate(invitation.invited_at)}</span>
+                  {auction.end_time && (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <span>Ends {formatDate(auction.end_time)}</span>
+                    </>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

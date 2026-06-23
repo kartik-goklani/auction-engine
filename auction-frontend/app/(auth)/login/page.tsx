@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Input } from '@/components/ui/Input';
+import { FormInput } from '@/components/ui/FormInput';
 import { Button } from '@/components/ui/Button';
 import { Gavel } from 'lucide-react';
 
@@ -19,9 +19,6 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      // Sign in via Supabase client so the session is stored in the browser.
-      // This is the only correct way to establish a session that getAccessToken()
-      // can read — calling the backend login endpoint alone does NOT set the session.
       const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError || !data.session) {
         throw new Error(authError?.message ?? 'Invalid credentials.');
@@ -37,38 +34,41 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg-page px-4">
-      {/* Subtle background grid */}
+      {/* Dot-grid background — very faint */}
       <div
-        className="pointer-events-none fixed inset-0 opacity-[0.03]"
+        className="pointer-events-none fixed inset-0 opacity-[0.04]"
         style={{
-          backgroundImage: 'linear-gradient(#18181b 1px, transparent 1px), linear-gradient(to right, #18181b 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
+          backgroundImage: 'radial-gradient(circle, var(--text-muted) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
         }}
       />
 
       <div className="w-full max-w-sm relative">
-        {/* Logo */}
-        <div className="mb-10 flex flex-col items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent shadow-[0_4px_16px_rgba(0,0,0,0.15)]">
-            <Gavel size={26} className="text-white" />
+        {/* Wordmark */}
+        <div className="mb-10 flex flex-col items-center gap-5">
+          <div className="flex h-12 w-12 items-center justify-center bg-accent text-[#0A0A0A]">
+            <Gavel size={22} strokeWidth={2.5} />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-text-primary tracking-tight">Auction Engine</h1>
-            <p className="mt-1 text-sm text-text-muted">Agentic Procurement Platform</p>
+            <h1 className="text-[22px] font-semibold text-text-primary tracking-tight">Auction Engine</h1>
+            <p className="mt-1 text-[11px] text-text-muted tracking-widest uppercase">Procurement Platform</p>
           </div>
         </div>
 
-        {/* Form card */}
+        {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-5 rounded-2xl bg-bg-card border border-border-subtle p-7 shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
+          className="flex flex-col gap-5 bg-bg-card border border-border-subtle p-6 rounded-[4px]"
         >
-          <div>
-            <h2 className="text-[15px] font-semibold text-text-primary">Sign in to your account</h2>
-            <p className="mt-0.5 text-xs text-text-muted">Enter your credentials to continue</p>
+          {/* Amber left-rule — the exchange signature on the login card */}
+          <div className="-ml-6 -mt-6 mb-0 h-[2px] w-12 bg-accent" />
+
+          <div className="mt-1">
+            <h2 className="text-[13px] font-semibold text-text-primary tracking-tight">Sign in</h2>
+            <p className="mt-0.5 text-[11px] text-text-muted">Enter your credentials to continue.</p>
           </div>
 
-          <Input
+          <FormInput
             label="Email"
             type="email"
             autoComplete="email"
@@ -77,7 +77,7 @@ export default function LoginPage() {
             placeholder="you@company.com"
             required
           />
-          <Input
+          <FormInput
             label="Password"
             type="password"
             autoComplete="current-password"
@@ -88,13 +88,13 @@ export default function LoginPage() {
             error={error}
           />
 
-          <Button type="submit" variant="primary" loading={loading} className="w-full mt-1">
+          <Button type="submit" variant="default" loading={loading} className="w-full mt-1">
             Sign In
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-[11px] text-text-muted">
-          Contact your administrator to get access.
+        <p className="mt-6 text-center text-[10px] text-text-muted uppercase tracking-widest">
+          Contact your administrator to request access.
         </p>
       </div>
     </div>

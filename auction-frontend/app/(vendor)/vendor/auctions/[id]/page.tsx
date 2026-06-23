@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { ArrowLeft, Gavel } from 'lucide-react';
+import { ArrowLeft, Gavel, Lock, BarChart2 } from 'lucide-react';
 import Link from 'next/link';
 import { useNotifications } from '@/components/ui/NotificationProvider';
 
@@ -23,12 +23,12 @@ export default function VendorAuctionDetailPage() {
   const { id }  = useParams<{ id: string }>();
   const { notificationVersion } = useNotifications();
 
-  const [auction,   setAuction]   = useState<AuctionRow | null>(null);
-  const [myBids,    setMyBids]    = useState<BidRowData[]>([]);
+  const [auction,    setAuction]    = useState<AuctionRow | null>(null);
+  const [myBids,     setMyBids]     = useState<BidRowData[]>([]);
   const [invitation, setInvitation] = useState<InvitationRow | null>(null);
   const [joinBlockedOpen, setJoinBlockedOpen] = useState(false);
-  const [responding, setResponding] = useState(false);
-  const [loading,   setLoading]   = useState(true);
+  const [responding,      setResponding]      = useState(false);
+  const [loading,         setLoading]         = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,9 +48,7 @@ export default function VendorAuctionDetailPage() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [id, notificationVersion]);
 
   async function handleEnterBiddingRoom() {
@@ -58,17 +56,15 @@ export default function VendorAuctionDetailPage() {
       router.push(`/vendor/auctions/${id}/bid`);
       return;
     }
-
     setJoinBlockedOpen(true);
   }
 
   async function handleAcceptInvitation() {
     if (!invitation) return;
-
     setResponding(true);
     try {
-      const updatedInvitation = await invitationsApi.respond(invitation.id, 'ACCEPTED');
-      setInvitation(updatedInvitation);
+      const updated = await invitationsApi.respond(invitation.id, 'ACCEPTED');
+      setInvitation(updated);
       setJoinBlockedOpen(false);
       router.push(`/vendor/auctions/${id}/bid`);
     } finally {
@@ -81,99 +77,126 @@ export default function VendorAuctionDetailPage() {
   const isOpen   = auction.status === AuctionStatus.OPEN;
   const isClosed = auction.status === AuctionStatus.CLOSED || auction.status === AuctionStatus.AWARDED;
   const isSealed = auction.type === AuctionType.SEALED_BID;
+  const isForward = auction.type === AuctionType.FORWARD;
+
+  const priceLabel    = isForward ? 'Floor Price'   : 'Ceiling Price';
+  const stepLabel     = isForward ? 'Min Increment' : 'Min Decrement';
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6">
+
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         <Link href="/vendor/auctions">
-          <button type="button" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-            <ArrowLeft size={16} />
+          <button
+            type="button"
+            className="mt-0.5 p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-[3px] transition-colors duration-150"
+          >
+            <ArrowLeft size={14} />
           </button>
         </Link>
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-lg font-bold text-text-primary">{auction.title}</h1>
+            <h1 className="text-base font-semibold text-text-primary tracking-tight">{auction.title}</h1>
             <AuctionTypeTag type={auction.type} />
-            <AuctionStatusBadge status={auction.status} pulse />
+            <AuctionStatusBadge status={auction.status} pulse={isOpen} />
           </div>
           {auction.description && (
-            <p className="mt-0.5 text-xs text-text-muted">{auction.description}</p>
+            <p className="mt-1 text-xs text-text-muted leading-relaxed">{auction.description}</p>
           )}
         </div>
       </div>
 
       {/* Sealed bid notice */}
       {isSealed && !isClosed && (
-        <div className="rounded-lg border border-border-default bg-bg-elevated px-4 py-3">
-          <p className="text-xs text-text-secondary">
-            This is a <strong className="text-text-primary">Sealed Bid</strong> auction.
-            All bids are confidential and revealed simultaneously when the auction closes.
+        <div className="flex items-start gap-3 border border-info/25 bg-info/5 px-4 py-3 rounded-[4px] border-l-2 border-l-info">
+          <Lock size={13} className="text-info shrink-0 mt-0.5" />
+          <p className="text-xs text-text-secondary leading-relaxed">
+            <span className="font-semibold text-text-primary">Sealed Bid</span> — your offer is confidential.
+            All bids are revealed simultaneously when the auction closes.
           </p>
         </div>
       )}
 
-      {/* Details */}
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          {
-            label: auction.type === AuctionType.FORWARD ? 'Floor Price' : 'Ceiling Price',
-            value: formatCurrency(auction.ceiling_price ?? 0),
-          },
-          {
-            label: auction.type === AuctionType.FORWARD ? 'Min Increment' : 'Min Decrement',
-            value: formatCurrency(auction.min_decrement ?? 0),
-          },
-          { label: 'Starts',        value: auction.start_time ? formatDate(auction.start_time) : '—' },
-          {
-            label: isOpen ? 'Time Left' : 'Ended',
-            value: isOpen && auction.end_time
-              ? null
-              : auction.end_time ? formatDate(auction.end_time) : '—',
-          },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-lg bg-bg-card border border-border-subtle p-3">
-            <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
-            <div className="mt-0.5">
-              {label === 'Time Left' && isOpen && auction.end_time ? (
-                <AuctionTimer endTime={auction.end_time} />
-              ) : (
-                <p className="text-xs font-medium text-text-secondary">{value}</p>
-              )}
-            </div>
-          </div>
-        ))}
+      {/* Detail grid — 4 cells: price, step, start, end */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px] border-l-2 border-l-accent">
+          <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">{priceLabel}</p>
+          <p className="font-mono text-base font-semibold text-accent">
+            {formatCurrency(auction.ceiling_price ?? 0)}
+          </p>
+        </div>
+        <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px]">
+          <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">{stepLabel}</p>
+          <p className="font-mono text-base font-semibold text-text-primary">
+            {formatCurrency(auction.min_decrement ?? 0)}
+          </p>
+        </div>
+        <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px]">
+          <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">Opens</p>
+          <p className="font-mono text-xs text-text-secondary">
+            {auction.start_time ? formatDate(auction.start_time) : '—'}
+          </p>
+        </div>
+        <div className="border border-border-subtle bg-bg-card p-4 rounded-[4px]">
+          <p className="text-[9px] uppercase tracking-widest text-text-muted mb-1.5">
+            {isOpen ? 'Time Left' : 'Closed'}
+          </p>
+          {isOpen && auction.end_time ? (
+            <AuctionTimer endTime={auction.end_time} className="font-mono text-xs" />
+          ) : (
+            <p className="font-mono text-xs text-text-secondary">
+              {auction.end_time ? formatDate(auction.end_time) : '—'}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* CTA */}
+      {/* Primary CTA */}
       {isOpen && (
-        <Button
-          variant="primary"
-          size="md"
-          onClick={() => void handleEnterBiddingRoom()}
-        >
-          <Gavel size={14} />
-          Enter Bidding Room
-        </Button>
+        <div className="border border-success/25 bg-success/5 rounded-[4px] border-l-2 border-l-success p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-text-primary">Bidding is live</p>
+            <p className="text-xs text-text-muted mt-0.5">
+              {invitation?.status === InvitationStatus.ACCEPTED
+                ? 'You are accepted — enter the bidding room to compete.'
+                : 'Accept this invitation to enter the live bidding room.'}
+            </p>
+          </div>
+          <Button
+            variant="default"
+            size="md"
+            onClick={() => void handleEnterBiddingRoom()}
+            className="shrink-0"
+          >
+            <Gavel size={13} />
+            Enter Bidding Room
+          </Button>
+        </div>
       )}
+
       {isClosed && (
         <Button
           variant="secondary"
           size="md"
           onClick={() => router.push(`/vendor/auctions/${id}/results`)}
         >
+          <BarChart2 size={13} />
           View Results
         </Button>
       )}
 
       {/* My bids */}
       {myBids.length > 0 && (
-        <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">My Bids</h2>
+        <Card padding="sm">
+          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-text-muted mb-3 px-1">
+            My Bids
+          </h2>
           <BidHistory bids={myBids} />
         </Card>
       )}
 
+      {/* Accept invitation modal */}
       <Modal
         open={joinBlockedOpen}
         onClose={() => setJoinBlockedOpen(false)}
@@ -187,19 +210,18 @@ export default function VendorAuctionDetailPage() {
               ? 'Accept this auction invitation now to enter the live bidding room.'
               : 'This auction is not available for live bidding with your current invitation status.'}
           </p>
-
           <div className="flex items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setJoinBlockedOpen(false)}>
               Cancel
             </Button>
             {invitation?.status === InvitationStatus.INVITED ? (
               <Button
-                variant="primary"
+                variant="default"
                 size="sm"
                 loading={responding}
                 onClick={() => void handleAcceptInvitation()}
               >
-                Accept Invitation
+                Accept &amp; Enter
               </Button>
             ) : (
               <Button variant="secondary" size="sm" onClick={() => setJoinBlockedOpen(false)}>

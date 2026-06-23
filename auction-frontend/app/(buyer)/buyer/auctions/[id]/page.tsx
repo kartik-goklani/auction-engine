@@ -256,12 +256,12 @@ export default function AuctionDetailPage() {
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-3">
-        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
-          <ArrowLeft size={16} />
+        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+          <ArrowLeft size={14} />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-lg font-bold text-text-primary truncate">{auction.title}</h1>
+            <h1 className="text-base font-semibold tracking-tight text-text-primary truncate">{auction.title}</h1>
             <AuctionTypeTag type={auction.type} />
             <AuctionStatusBadge status={auction.status} pulse />
           </div>
@@ -288,7 +288,7 @@ export default function AuctionDetailPage() {
           },
           { label: 'Visibility', value: auction.visibility },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-lg bg-bg-card border border-border-subtle p-3">
+          <div key={label} className="rounded-[4px] bg-bg-card border border-border-subtle p-3">
             <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
             <p className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</p>
           </div>
@@ -296,13 +296,13 @@ export default function AuctionDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-lg bg-bg-card border border-border-subtle p-3">
+        <div className="rounded-[4px] bg-bg-card border border-border-subtle p-3">
           <p className="text-[10px] uppercase tracking-wider text-text-muted">Starts</p>
           <p className="mt-0.5 text-xs font-medium text-text-secondary">
             {auction.start_time ? formatDate(auction.start_time) : '—'}
           </p>
         </div>
-        <div className="rounded-lg bg-bg-card border border-border-subtle p-3">
+        <div className="rounded-[4px] bg-bg-card border border-border-subtle p-3">
           <p className="text-[10px] uppercase tracking-wider text-text-muted">
             {isOpen ? 'Time Left' : 'Ends'}
           </p>
@@ -410,7 +410,7 @@ export default function AuctionDetailPage() {
         {editForm && (
           <div className="flex flex-col gap-4">
             {isPublished && (
-              <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5">
+              <div className="rounded-[4px] border border-warning/30 bg-warning/8 px-3 py-2.5">
                 <p className="text-xs text-warning">
                   This auction is <strong>Published</strong>. Vendors who accepted the invitation
                   will receive an in-app notification about these changes.
@@ -423,7 +423,7 @@ export default function AuctionDetailPage() {
               <input
                 value={editForm.title}
                 onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
               />
             </div>
 
@@ -433,7 +433,7 @@ export default function AuctionDetailPage() {
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 rows={2}
-                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200 resize-none"
+                className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default placeholder:text-text-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150 resize-none"
               />
             </div>
 
@@ -446,7 +446,7 @@ export default function AuctionDetailPage() {
                   step={1}
                   value={editForm.quantity}
                   onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -454,7 +454,7 @@ export default function AuctionDetailPage() {
                 <input
                   value={editForm.unit}
                   onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
                 />
               </div>
             </div>
@@ -470,7 +470,7 @@ export default function AuctionDetailPage() {
                   step={0.01}
                   value={editForm.ceilingPriceRupees}
                   onChange={(e) => setEditForm({ ...editForm, ceilingPriceRupees: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -483,7 +483,7 @@ export default function AuctionDetailPage() {
                   step={0.01}
                   value={editForm.minDecrementRupees}
                   onChange={(e) => setEditForm({ ...editForm, minDecrementRupees: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
                 />
               </div>
             </div>
@@ -495,7 +495,7 @@ export default function AuctionDetailPage() {
                   type="datetime-local"
                   value={editForm.startTime}
                   onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -504,7 +504,7 @@ export default function AuctionDetailPage() {
                   type="datetime-local"
                   value={editForm.endTime}
                   onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
-                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-lg border border-border-default focus:outline-none focus:border-accent/40 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.20)] transition-all duration-200"
+                  className="w-full bg-bg-input text-text-primary text-sm px-3 py-2 rounded-[4px] border border-border-default focus:outline-none focus:border-accent focus:ring-1 focus:ring-border-accent transition-colors duration-150"
                 />
               </div>
             </div>
@@ -541,16 +541,16 @@ export default function AuctionDetailPage() {
       >
         <div className="flex flex-col gap-4">
           {/* Tabs */}
-          <div className="flex gap-1 bg-bg-elevated p-1 rounded-lg">
+          <div className="flex items-center border-b border-border-subtle">
             {(['ai', 'all'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setInviteTab(tab)}
-                className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+                className={`relative px-3 pb-2 text-[11px] font-medium tracking-wide uppercase transition-colors after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1px] ${
                   inviteTab === tab
-                    ? 'bg-bg-card text-text-primary shadow-sm'
-                    : 'text-text-muted hover:text-text-primary'
+                    ? 'text-accent after:bg-accent'
+                    : 'text-text-muted hover:text-text-primary after:bg-transparent'
                 }`}
               >
                 {tab === 'ai'
@@ -597,14 +597,14 @@ export default function AuctionDetailPage() {
                           return next;
                         });
                       }}
-                      className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
+                      className={`flex items-start gap-3 p-3 rounded-[4px] border text-left transition-colors ${
                         isInvited   ? 'opacity-50 cursor-default border-border-subtle bg-bg-card' :
-                        isSelected  ? 'border-accent/50 bg-accent/5' :
-                                      'border-border-subtle bg-bg-card hover:border-accent/30'
+                        isSelected  ? 'border-border-accent bg-accent/5' :
+                                      'border-border-subtle bg-bg-card hover:border-border-default'
                       }`}
                     >
                       {/* Checkbox */}
-                      <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-accent border-accent' : 'border-border-default'}`}>
+                      <div className={`mt-0.5 w-4 h-4 rounded-[3px] border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-accent border-accent' : 'border-border-default bg-bg-input'}`}>
                         {isSelected && (
                           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                             <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -615,7 +615,7 @@ export default function AuctionDetailPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold text-text-primary">{v.company_name}</span>
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${tierCls}`}>{v.tier}</span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-[2px] border uppercase tracking-wide ${tierCls}`}>{v.tier}</span>
                           <span className="ml-auto text-xs font-mono text-text-secondary">{v.score}/100</span>
                         </div>
                         <p className="text-[11px] text-text-muted mt-0.5 line-clamp-2">{v.reason}</p>
