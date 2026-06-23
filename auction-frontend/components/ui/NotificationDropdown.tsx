@@ -31,19 +31,19 @@ export function NotificationDropdown() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-border-subtle bg-bg-card text-text-secondary transition-colors duration-150 hover:text-text-primary hover:bg-bg-elevated"
+        className="relative flex h-6 w-6 items-center justify-center rounded-[3px] border border-border-subtle bg-transparent text-text-muted transition-colors duration-150 hover:text-text-primary hover:bg-bg-elevated"
         aria-label="Notifications"
       >
-        <Bell size={16} />
+        <Bell size={12} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border border-[var(--inverse-control-border)] bg-[var(--inverse-control-bg)] px-1 text-[8px] font-bold leading-none text-[var(--inverse-control-text)]">
+          <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 text-[8px] font-bold leading-none text-[#0A0A0A]">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[360px] rounded-[14px] bg-bg-card border border-border-subtle shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-[360px] rounded-[4px] bg-bg-elevated border border-border-default shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
             <p className="text-[13px] font-semibold text-text-primary">Notifications</p>

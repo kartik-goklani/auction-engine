@@ -32,11 +32,17 @@ export function JsonViewer({ value, depth = 0 }: JsonViewerProps) {
     // so they expand into the nested viewer instead of rendering as a raw string.
     const trimmed = value.trim();
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      // Parse outside JSX to avoid constructing JSX inside a try/catch block.
+      let parsedJson: unknown = null;
+      let isValidJson = false;
       try {
-        const parsed: unknown = JSON.parse(trimmed);
-        return <JsonViewer value={parsed} depth={depth} />;
+        parsedJson = JSON.parse(trimmed);
+        isValidJson = true;
       } catch {
         // Not valid JSON — fall through to plain string rendering
+      }
+      if (isValidJson) {
+        return <JsonViewer value={parsedJson} depth={depth} />;
       }
     }
     return (

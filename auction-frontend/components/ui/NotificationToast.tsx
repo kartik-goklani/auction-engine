@@ -5,10 +5,10 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
 } from 'react';
 import { X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,39 +43,19 @@ interface ToastItemProps {
 }
 
 function ToastItem({ toast, onRemove }: ToastItemProps) {
-  const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Slide-in: defer setting visible to true by one tick so the CSS transition fires.
+  // Auto-dismiss: remove from state after duration — AnimatePresence handles the exit animation
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 10);
+    const t = setTimeout(() => onRemove(toast.id), toast.duration);
     return () => clearTimeout(t);
-  }, []);
-
-  const dismiss = useCallback(() => {
-    setVisible(false);
-    // Wait for the slide-out transition before removing from DOM
-    const t = setTimeout(() => onRemove(toast.id), 300);
-    return () => clearTimeout(t);
-  }, [onRemove, toast.id]);
-
-  // Auto-dismiss after duration
-  useEffect(() => {
-    timerRef.current = setTimeout(dismiss, toast.duration);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [dismiss, toast.duration]);
+  }, [onRemove, toast.id, toast.duration]);
 
   return (
-    <div
-      className={[
-        'pointer-events-auto w-[340px] rounded-[12px] bg-bg-card border border-border-subtle',
-        'shadow-[0_8px_32px_rgba(0,0,0,0.5)] p-4 transition-all duration-300 ease-out',
-        visible
-          ? 'translate-x-0 opacity-100'
-          : 'translate-x-full opacity-0',
-      ].join(' ')}
+    <motion.div
+      initial={{ x: '100%', opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: '100%', opacity: 0, transition: { duration: 0.2, ease: 'easeIn' } }}
+      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+      className="pointer-events-auto w-[340px] rounded-[4px] bg-bg-elevated border border-border-default shadow-[0_8px_32px_rgba(0,0,0,0.5)] p-4"
     >
       <div className="flex items-start gap-3">
         {/* Accent dot */}
@@ -92,26 +72,26 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
           )}
         </div>
 
-        <button
+        <motion.button
           type="button"
-          onClick={dismiss}
+          onClick={() => onRemove(toast.id)}
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
           className="shrink-0 p-0.5 rounded text-text-muted hover:text-text-primary transition-colors"
           aria-label="Dismiss notification"
         >
           <X size={12} />
-        </button>
+        </motion.button>
       </div>
 
       {/* Progress bar — depletes over toast.duration */}
       <div className="mt-3 h-[2px] bg-border-subtle rounded-full overflow-hidden">
         <div
           className="h-full bg-accent rounded-full"
-          style={{
-            animation: `toast-shrink ${toast.duration}ms linear forwards`,
-          }}
+          style={{ animation: `toast-shrink ${toast.duration}ms linear forwards` }}
         />
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -139,9 +119,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         aria-live="polite"
         aria-atomic="false"
       >
-        {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
-        ))}
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
+          ))}
+        </AnimatePresence>
       </div>
 
       {/* Keyframe for the progress bar shrink animation */}

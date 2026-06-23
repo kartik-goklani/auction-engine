@@ -1,17 +1,118 @@
+'use client';
+
+import * as React from 'react';
 import { type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-// ─── Column definition ────────────────────────────────────────────────────────
+// ── Exchange Table primitive ───────────────────────────────────────────────────
+// Dense, financial-data styling. No rounded cells. Tight row height.
+// Header uses tiny uppercase tracking — Bloomberg-style column labels.
+// Self-contained: does not import from table.tsx (macOS case-sensitivity rule).
+
+function ShadTable({ className, ...props }: React.ComponentProps<'table'>) {
+  return (
+    <div className="relative w-full overflow-x-auto">
+      <table
+        data-slot="table"
+        className={cn('w-full caption-bottom text-xs', className)}
+        {...props}
+      />
+    </div>
+  );
+}
+
+export function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn('border-b border-border-subtle [&_tr]:border-b', className)}
+      {...props}
+    />
+  );
+}
+
+export function TableBody({ className, ...props }: React.ComponentProps<'tbody'>) {
+  return (
+    <tbody
+      data-slot="table-body"
+      className={cn('[&_tr:last-child]:border-0', className)}
+      {...props}
+    />
+  );
+}
+
+export function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
+  return (
+    <tr
+      data-slot="table-row"
+      className={cn(
+        'border-b border-border-subtle transition-colors duration-100',
+        'hover:bg-bg-elevated',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
+  return (
+    <th
+      data-slot="table-head"
+      className={cn(
+        'h-8 px-3 text-left align-middle',
+        'text-[9px] font-semibold uppercase tracking-widest text-text-muted',
+        'whitespace-nowrap',
+        '[&:has([role=checkbox])]:pr-0',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
+  return (
+    <td
+      data-slot="table-cell"
+      className={cn(
+        'px-3 py-2.5 align-middle whitespace-nowrap text-text-secondary',
+        '[&:has([role=checkbox])]:pr-0',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function TableFooter({ className, ...props }: React.ComponentProps<'tfoot'>) {
+  return (
+    <tfoot
+      data-slot="table-footer"
+      className={cn('bg-bg-elevated border-t border-border-subtle font-medium [&>tr]:last:border-b-0', className)}
+      {...props}
+    />
+  );
+}
+
+export function TableCaption({ className, ...props }: React.ComponentProps<'caption'>) {
+  return (
+    <caption
+      data-slot="table-caption"
+      className={cn('mt-4 text-xs text-text-muted', className)}
+      {...props}
+    />
+  );
+}
+
+// ── App-layer generic Table wrapper ───────────────────────────────────────────
 
 export interface Column<T> {
   key: string;
-  header: ReactNode;
+  header: string;
   cell: (row: T) => ReactNode;
   className?: string;
-  headerClassName?: string;
 }
-
-// ─── Table ────────────────────────────────────────────────────────────────────
 
 interface TableProps<T> {
   columns: Column<T>[];
@@ -27,61 +128,46 @@ export function Table<T>({
   data,
   keyExtractor,
   onRowClick,
-  emptyMessage = 'No data yet.',
+  emptyMessage = 'No data',
   className,
 }: TableProps<T>) {
   return (
-    <div className={cn('overflow-x-auto rounded-[10px] border border-[rgba(255,255,255,0.06)]', className)}>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[rgba(255,255,255,0.06)]">
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={cn(
-                  'px-4 py-3 text-left text-[11px] font-medium text-text-secondary uppercase tracking-wider',
-                  col.headerClassName,
-                )}
-              >
-                {col.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.length === 0 ? (
-            <tr>
-              <td
-                colSpan={columns.length}
-                className="px-4 py-8 text-center text-sm text-text-muted"
-              >
-                {emptyMessage}
-              </td>
-            </tr>
-          ) : (
-            data.map((row) => (
-              <tr
-                key={keyExtractor(row)}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={cn(
-                  'border-b border-[rgba(255,255,255,0.04)] last:border-0',
-                  'transition-colors duration-150',
-                  onRowClick && 'cursor-pointer hover:bg-bg-elevated/60',
-                )}
-              >
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className={cn('px-4 py-3 text-text-primary', col.className)}
-                  >
-                    {col.cell(row)}
-                  </td>
-                ))}
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+    <ShadTable className={className}>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          {columns.map((col) => (
+            <TableHead key={col.key} className={col.className}>
+              {col.header}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {data.length === 0 ? (
+          <TableRow className="hover:bg-transparent">
+            <TableCell
+              colSpan={columns.length}
+              className="py-8 text-center text-xs text-text-muted"
+            >
+              {emptyMessage}
+            </TableCell>
+          </TableRow>
+        ) : (
+          data.map((row) => (
+            <TableRow
+              key={keyExtractor(row)}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={cn(onRowClick && 'cursor-pointer')}
+            >
+              {columns.map((col) => (
+                <TableCell key={col.key} className={col.className}>
+                  {col.cell(row)}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </ShadTable>
   );
 }

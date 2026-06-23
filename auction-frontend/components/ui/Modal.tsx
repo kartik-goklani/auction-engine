@@ -1,9 +1,22 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
-import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Button } from './Button';
+import { type ReactNode } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from './dialog';
+
+// ── App-layer Modal wrapper over shadcn base-nova Dialog ───────────────────────
+// All application modals use this component. It wraps the Dialog primitives in
+// dialog.tsx and exposes a simpler API (onClose instead of onOpenChange, plus
+// named size and backdrop-lock props).
+//
+// Focus trapping and Escape-to-close come from @base-ui/react/dialog automatically.
+// disablePointerDismissal is the base-ui API to block backdrop-click-close while
+// still allowing Escape and the close button.
 
 interface ModalProps {
   open: boolean;
@@ -12,13 +25,17 @@ interface ModalProps {
   description?: string;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  /**
+   * When true, clicking the backdrop does NOT close the modal.
+   * Escape key and the X close button still work.
+   */
   disableBackdropClose?: boolean;
 }
 
-const sizeClasses = {
-  sm: 'max-w-sm',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
+const sizeClasses: Record<NonNullable<ModalProps['size']>, string> = {
+  sm: 'sm:max-w-sm',
+  md: 'sm:max-w-lg',
+  lg: 'sm:max-w-2xl',
 };
 
 export function Modal({
@@ -30,61 +47,23 @@ export function Modal({
   size = 'md',
   disableBackdropClose = false,
 }: ModalProps) {
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+      disablePointerDismissal={disableBackdropClose}
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-[rgba(0,0,0,0.65)]"
-        onClick={disableBackdropClose ? undefined : onClose}
-      />
-
-      {/* Panel */}
-      <div
-        className={cn(
-          'relative w-full bg-bg-modal rounded-[10px]',
-          'border border-[rgba(255,255,255,0.06)]',
-          'shadow-[0_16px_48px_rgba(0,0,0,0.70)]',
-          'p-6 flex flex-col gap-4',
-          sizeClasses[size],
+      <DialogContent className={sizeClasses[size]} showCloseButton>
+        {(title || description) && (
+          <DialogHeader>
+            {title && <DialogTitle>{title}</DialogTitle>}
+            {description && <DialogDescription>{description}</DialogDescription>}
+          </DialogHeader>
         )}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            {title && (
-              <h2 className="text-base font-semibold text-text-primary">{title}</h2>
-            )}
-            {description && (
-              <p className="text-sm text-text-secondary mt-1">{description}</p>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="flex-shrink-0 -mt-1 -mr-2 p-1.5"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </Button>
-        </div>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
