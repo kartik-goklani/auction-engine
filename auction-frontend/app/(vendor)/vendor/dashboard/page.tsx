@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Gavel, ChevronRight, Clock } from 'lucide-react';
+import { Gavel, ChevronRight } from 'lucide-react';
 import { DashboardBanner } from '@/components/ui/DashboardBanner';
 import { formatDate } from '@/lib/utils';
 import { useNotifications } from '@/components/ui/NotificationProvider';
@@ -149,9 +149,19 @@ export default function VendorDashboardPage() {
             description="A buyer will invite you once an auction is ready."
           />
         ) : (
-          <div className="flex flex-col gap-px border border-border-subtle rounded-[4px] overflow-hidden">
-            {invitations.map((inv, idx) => {
-              const auction = auctionMap.get(inv.auction_id);
+          <div className="flex flex-col border border-border-subtle rounded-[4px] overflow-hidden">
+            {/* Column headers */}
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-8 px-5 py-2.5 bg-bg-elevated border-b border-border-subtle">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted">Auction</span>
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted w-28 text-right">Invited</span>
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted w-28 text-right">End Date</span>
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted w-20 text-right">Type</span>
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted w-24 text-right">Status</span>
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted w-32 text-right">Invitation</span>
+            </div>
+
+            {invitations.map((inv) => {
+              const auction   = auctionMap.get(inv.auction_id);
               const isPending = inv.status === InvitationStatus.INVITED;
               const isLive    = auction?.status === AuctionStatus.OPEN;
 
@@ -159,45 +169,49 @@ export default function VendorDashboardPage() {
                 <div
                   key={inv.id}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-3 bg-bg-card border-l-2 transition-colors duration-150',
-                    isPending      ? 'border-l-warning'       :
-                    isLive         ? 'border-l-success'        :
-                    'border-l-transparent',
-                    !isPending && 'cursor-pointer hover:bg-bg-card-hover',
-                    idx !== 0 && 'border-t border-border-subtle',
+                    'grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-8 px-5 py-3.5',
+                    'border-b border-border-subtle last:border-0 transition-colors duration-150',
+                    !isPending && 'cursor-pointer hover:bg-bg-card',
                   )}
                   onClick={!isPending ? () => router.push(`/vendor/auctions/${inv.auction_id}`) : undefined}
                   role={!isPending ? 'button' : undefined}
                   tabIndex={!isPending ? 0 : undefined}
                   onKeyDown={!isPending ? (e) => { if (e.key === 'Enter') router.push(`/vendor/auctions/${inv.auction_id}`); } : undefined}
                 >
-                  {/* Icon */}
-                  <div className={cn(
-                    'shrink-0 flex h-7 w-7 items-center justify-center rounded-[3px] border',
-                    isLive    ? 'border-success/25 bg-success/8  text-success' :
-                    isPending ? 'border-warning/25 bg-warning/8  text-warning' :
-                    'border-border-subtle bg-bg-elevated text-text-muted',
-                  )}>
-                    <Gavel size={12} />
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium text-text-primary truncate">
-                        {auction?.title ?? 'Loading…'}
-                      </p>
-                      {auction && <AuctionStatusBadge status={auction.status} pulse={isLive} />}
-                      {auction && <AuctionTypeTag type={auction.type} />}
-                    </div>
-                    <p className="text-[10px] text-text-muted mt-0.5 flex items-center gap-1">
-                      <Clock size={9} />
-                      Invited {formatDate(inv.invited_at)}
+                  {/* Auction title */}
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-text-primary truncate">
+                      {auction?.title ?? 'Loading…'}
                     </p>
+                    {auction?.category && (
+                      <p className="text-[10px] text-text-muted mt-0.5">{auction.category}</p>
+                    )}
                   </div>
 
-                  {/* Right: actions or status + chevron */}
-                  <div className="shrink-0 flex items-center gap-2">
+                  {/* Invited date */}
+                  <span className="font-mono text-[11px] text-text-secondary w-28 text-right">
+                    {formatDate(inv.invited_at)}
+                  </span>
+
+                  {/* End date */}
+                  <span className="font-mono text-[11px] text-text-secondary w-28 text-right">
+                    {auction?.end_time ? formatDate(auction.end_time) : '—'}
+                  </span>
+
+                  {/* Type tag */}
+                  <div className="w-20 flex justify-end">
+                    {auction ? <AuctionTypeTag type={auction.type} /> : <span className="text-[10px] text-text-muted">—</span>}
+                  </div>
+
+                  {/* Status badge */}
+                  <div className="w-24 flex justify-end">
+                    {auction
+                      ? <AuctionStatusBadge status={auction.status} pulse={isLive} size="sm" />
+                      : <span className="text-[10px] text-text-muted">—</span>}
+                  </div>
+
+                  {/* Invitation actions / badge */}
+                  <div className="w-32 flex items-center justify-end gap-2">
                     {isPending ? (
                       <>
                         <Button
