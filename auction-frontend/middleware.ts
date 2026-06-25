@@ -23,36 +23,56 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+  // response must be mutable so setAll can update it when tokens are rotated
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (cookiesToSet) => {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
-        });
+        // Write refreshed tokens back into the request (so subsequent reads
+        // within this middleware execution see the new values) and into the
+        // response (so the browser stores the new tokens).
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options),
+        );
       },
     },
   });
 
-  const { data: { session } } = await supabase.auth.getSession();
+  // getUser() validates the JWT with the Supabase server on every call and
+  // correctly handles token rotation. getSession() only reads from cookies and
+  // will not detect an expired session until the browser tries to use it.
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  const redirect = (path: string): NextResponse => {
+    const redirectResponse = NextResponse.redirect(new URL(path, request.url));
+    // Copy any rotated auth cookies to the redirect response so the browser
+    // stores them. Without this, the old refresh token is reused on the next
+    // request, causing "Invalid Refresh Token: Already Used".
+    response.cookies.getAll().forEach(({ name, value, ...rest }) => {
+      redirectResponse.cookies.set(name, value, rest);
+    });
+    return redirectResponse;
+  };
+
+  if (!user) {
+    return redirect('/login');
   }
 
-  const role = (session.user.user_metadata?.role as string | undefined) ?? '';
+  const role = (user.user_metadata?.role as string | undefined) ?? '';
 
   if (pathname.startsWith('/buyer') && role !== 'buyer') {
-    return NextResponse.redirect(new URL('/vendor/dashboard', request.url));
+    return redirect('/vendor/dashboard');
   }
 
   if (pathname.startsWith('/vendor') && role !== 'vendor') {
-    return NextResponse.redirect(new URL('/buyer/dashboard', request.url));
+    return redirect('/buyer/dashboard');
   }
 
   return response;
