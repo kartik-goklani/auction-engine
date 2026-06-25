@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { auctionsApi, bidsApi, vendorsApi, agentsApi } from '@/lib/api';
 import type { AuctionRow, BidRow as BidRowData, VendorRow, AuctionAlertRow, AuctionAiMetadata } from '@/lib/types';
 import { AuctionStatus, AuctionType } from '@/lib/types';
+import { ExportReportButton } from '@/components/export/ExportReportButton';
 import { AuctionStatusBadge } from '@/components/auction/AuctionStatusBadge';
 import { BidTrendChart } from '@/components/auction/BidTrendChart';
 import { AgentRecommendationCard } from '@/components/agent/AgentRecommendationCard';
@@ -109,14 +110,27 @@ export default function AuctionResultsPage() {
     }, {}),
   ).sort((a, b) => isForward ? b.amount - a.amount : a.amount - b.amount);
 
+  const reportData = {
+    auction,
+    bids,
+    vendors,
+    recommendation,
+    anomalyAlerts,
+    priceMetadata,
+    exportedAt: new Intl.DateTimeFormat('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }).format(new Date()),
+  };
+
   return (
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href={`/buyer/auctions/${id}`} className="inline-flex items-center justify-center p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+        <Link href={`/buyer/auctions/${id}`} className="inline-flex items-center justify-center p-1.5 rounded-full text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
           <ArrowLeft size={14} />
         </Link>
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-base font-semibold tracking-tight text-text-primary">{auction.title}</h1>
             <AuctionStatusBadge status={auction.status} />
@@ -125,6 +139,7 @@ export default function AuctionResultsPage() {
             Closed {auction.end_time ? formatDate(auction.end_time) : ''}
           </p>
         </div>
+        <ExportReportButton data={reportData} />
       </div>
 
       {/* Reserve not met banner */}
@@ -245,7 +260,7 @@ export default function AuctionResultsPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-text-primary truncate">{name}</span>
                         {isAiPick && (
-                          <span className="text-[9px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded-[2px] uppercase tracking-wide border border-border-accent">
+                          <span className="text-[9px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded-full uppercase tracking-wide border border-border-accent">
                             AI Pick
                           </span>
                         )}
