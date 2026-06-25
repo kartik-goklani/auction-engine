@@ -15,6 +15,10 @@ export interface BidRow {
   submitted_at: string;
 }
 
+export interface BidWithVendorName extends BidRow {
+  vendor_name: string;
+}
+
 export interface BidRpcResult {
   id: string;
   auction_id: string;

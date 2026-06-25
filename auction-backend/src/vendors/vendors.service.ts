@@ -167,4 +167,8 @@ export class VendorsService {
   async getUserIdByVendorId(vendorId: string): Promise<string | null> {
     return this.vendorsRepository.findUserIdByVendorId(vendorId);
   }
+
+  findNamesByIds(ids: string[]): Promise<Map<string, string>> {
+    return this.vendorsRepository.findNamesByIds(ids);
+  }
 }

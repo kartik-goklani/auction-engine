@@ -2,7 +2,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BidsRepository, type BidRow, type BidRpcResult } from './bids.repository';
+import { BidsRepository, type BidRow, type BidRpcResult, type BidWithVendorName } from './bids.repository';
 import { AuctionsService } from '../auctions/auctions.service';
 import { VendorsService } from '../vendors/vendors.service';
 import { AgentsService } from '../agents/agents.service';
@@ -243,8 +243,14 @@ export class BidsService {
 
   // ── Queries ───────────────────────────────────────────────────────────────
 
-  findByAuction(auctionId: string): Promise<BidRow[]> {
-    return this.bidsRepository.findByAuction(auctionId);
+  async findByAuction(auctionId: string): Promise<BidWithVendorName[]> {
+    const bids = await this.bidsRepository.findByAuction(auctionId);
+    const uniqueVendorIds = [...new Set(bids.map((b) => b.vendor_id))];
+    const nameMap = await this.vendorsService.findNamesByIds(uniqueVendorIds);
+    return bids.map((bid) => ({
+      ...bid,
+      vendor_name: nameMap.get(bid.vendor_id) ?? 'Unknown Vendor',
+    }));
   }
 
   async findMyBids(auctionId: string, vendorUserId: string): Promise<BidRow[]> {

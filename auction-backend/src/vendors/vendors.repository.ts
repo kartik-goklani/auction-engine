@@ -241,4 +241,20 @@ export class VendorsRepository {
     if (error) throw new InternalServerErrorException(error.message);
     return count ?? 0;
   }
+
+  async findNamesByIds(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const { data, error } = await this.db
+      .getClient()
+      .from('vendors')
+      .select('id, company_name')
+      .in('id', ids);
+
+    if (error) throw new InternalServerErrorException('Failed to fetch vendor names');
+    const nameMap = new Map<string, string>();
+    for (const row of (data ?? []) as { id: string; company_name: string }[]) {
+      nameMap.set(row.id, row.company_name);
+    }
+    return nameMap;
+  }
 }
