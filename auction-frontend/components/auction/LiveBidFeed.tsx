@@ -43,15 +43,20 @@ export function LiveBidFeed({ bids, className }: LiveBidFeedProps) {
                 : 'bg-bg-elevated border border-transparent',
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               {idx === 0 && (
-                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                <span className="inline-flex shrink-0 h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
               )}
-              <span className="font-mono text-sm font-semibold text-accent">
-                {formatCurrency(entry.amount)}
-              </span>
+              <div className="min-w-0">
+                <span className="font-mono text-sm font-semibold text-accent">
+                  {formatCurrency(entry.amount)}
+                </span>
+                {entry.vendor_name && (
+                  <p className="text-[10px] text-text-muted truncate">{entry.vendor_name}</p>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               <span className="text-[10px] text-text-muted">Bid #{acceptedBids.length - idx}</span>
               <span className="text-[10px] text-text-muted">
                 {new Date(entry.submitted_at).toLocaleTimeString('en-IN', {

@@ -540,7 +540,7 @@ export function BidTrendChart({
               />
               {bidCountVsPriceDropData.map((entry) => {
                 const color  = vendorColors[entry.vendor] ?? '#22c55e';
-                const letter = entry.vendor.replace('Bidder ', '');
+                const letter = entry.vendor.substring(0, 2).toUpperCase();
                 return (
                   <Scatter
                     key={entry.vendor}

@@ -79,7 +79,7 @@ export function useBidChartData(
     accepted.forEach((b) => {
       if (!map.has(b.vendor_id)) {
         const idx   = map.size;
-        const label = `Bidder ${VENDOR_LABELS[idx] ?? idx}`;
+        const label = b.vendor_name ?? `Bidder ${VENDOR_LABELS[idx] ?? idx}`;
         map.set(b.vendor_id, label);
       }
     });

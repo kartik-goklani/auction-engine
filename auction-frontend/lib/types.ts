@@ -256,6 +256,7 @@ export interface BidRow {
   id: string;
   auction_id: string;
   vendor_id: string;
+  vendor_name?: string;
   amount: number;                      // paise
   status: BidStatus;
   rejection_reason: BidRejectionReason | null;
