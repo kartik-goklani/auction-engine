@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Gavel, ChevronRight, Clock } from 'lucide-react';
+import { DashboardBanner } from '@/components/ui/DashboardBanner';
 import { formatDate } from '@/lib/utils';
 import { useNotifications } from '@/components/ui/NotificationProvider';
 import { cn } from '@/lib/utils';
@@ -77,6 +78,8 @@ export default function VendorDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
+
+      <DashboardBanner />
 
       {/* Page header */}
       <div>
