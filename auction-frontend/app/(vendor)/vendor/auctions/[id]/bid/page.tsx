@@ -168,7 +168,7 @@ export default function VendorBidPage() {
         <Link href={`/vendor/auctions/${id}`}>
           <button
             type="button"
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-[3px] transition-colors duration-150"
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-full transition-colors duration-150"
           >
             <ArrowLeft size={14} />
           </button>

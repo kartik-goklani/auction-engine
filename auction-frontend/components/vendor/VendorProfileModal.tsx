@@ -77,7 +77,7 @@ export function VendorProfileModal({ vendorId, onClose }: VendorProfileModalProp
                 {vendor.category_tags.map((tag) => (
                   <span
                     key={tag}
-                    className="bg-bg-tag text-text-muted text-[9px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-[2px]"
+                    className="bg-bg-tag text-text-muted text-[9px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full"
                   >
                     {tag}
                   </span>

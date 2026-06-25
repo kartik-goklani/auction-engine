@@ -78,7 +78,7 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
 
         {/* Category chip */}
         {auction.category && (
-          <span className="inline-flex self-start bg-bg-tag px-2 py-0.5 text-[9px] font-medium tracking-wider uppercase text-text-muted rounded-[2px]">
+          <span className="inline-flex self-start bg-bg-tag px-2 py-0.5 text-[9px] font-medium tracking-wider uppercase text-text-muted rounded-full">
             {auction.category}
           </span>
         )}

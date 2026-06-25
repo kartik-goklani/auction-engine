@@ -55,7 +55,7 @@ export default function VendorResultsPage() {
       <div className="flex items-start gap-3">
         <Link
           href={`/vendor/auctions/${id}`}
-          className="mt-0.5 inline-flex items-center justify-center p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
+          className="mt-0.5 inline-flex items-center justify-center p-1.5 rounded-full text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
         >
           <ArrowLeft size={14} />
         </Link>

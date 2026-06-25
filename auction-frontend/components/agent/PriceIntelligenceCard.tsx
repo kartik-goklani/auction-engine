@@ -166,7 +166,7 @@ export function PriceIntelligenceCard({
                 href={source.url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-[3px] bg-bg-elevated border border-border-subtle px-3 py-2 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                className="rounded-full bg-bg-elevated border border-border-subtle px-3 py-2 text-xs text-text-secondary hover:text-text-primary transition-colors"
               >
                 <span className="font-medium text-text-primary">{source.title}</span>
                 <span className="block text-text-muted mt-0.5">

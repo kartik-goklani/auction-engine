@@ -256,7 +256,7 @@ export default function AuctionDetailPage() {
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-3">
-        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-1.5 rounded-full text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
           <ArrowLeft size={14} />
         </Link>
         <div className="flex-1 min-w-0">
@@ -615,7 +615,7 @@ export default function AuctionDetailPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold text-text-primary">{v.company_name}</span>
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-[2px] border uppercase tracking-wide ${tierCls}`}>{v.tier}</span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border uppercase tracking-wide ${tierCls}`}>{v.tier}</span>
                           <span className="ml-auto text-xs font-mono text-text-secondary">{v.score}/100</span>
                         </div>
                         <p className="text-[11px] text-text-muted mt-0.5 line-clamp-2">{v.reason}</p>

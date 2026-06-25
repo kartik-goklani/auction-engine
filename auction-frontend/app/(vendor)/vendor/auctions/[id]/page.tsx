@@ -90,7 +90,7 @@ export default function VendorAuctionDetailPage() {
         <Link href="/vendor/auctions">
           <button
             type="button"
-            className="mt-0.5 p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-[3px] transition-colors duration-150"
+            className="mt-0.5 p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-full transition-colors duration-150"
           >
             <ArrowLeft size={14} />
           </button>

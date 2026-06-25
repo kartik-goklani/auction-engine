@@ -19,14 +19,14 @@ export const buttonVariants = cva(
         link:        "text-accent underline-offset-4 hover:underline border-transparent",
       },
       size: {
-        default:   "h-8 px-3 py-1.5 rounded-[4px]",
-        xs:        "h-6 px-2 text-xs rounded-[3px]",
-        sm:        "h-7 px-2.5 text-xs rounded-[4px]",
-        lg:        "h-9 px-4 rounded-[4px]",
-        icon:      "size-8 rounded-[4px]",
-        "icon-xs": "size-6 rounded-[3px]",
-        "icon-sm": "size-7 rounded-[4px]",
-        "icon-lg": "size-9 rounded-[4px]",
+        default:   "h-8 px-3 py-1.5 rounded-full",
+        xs:        "h-6 px-2 text-xs rounded-full",
+        sm:        "h-7 px-2.5 text-xs rounded-full",
+        lg:        "h-9 px-4 rounded-full",
+        icon:      "size-8 rounded-full",
+        "icon-xs": "size-6 rounded-full",
+        "icon-sm": "size-7 rounded-full",
+        "icon-lg": "size-9 rounded-full",
       },
     },
     defaultVariants: {
@@ -53,9 +53,9 @@ const variantMap: Record<Variant, 'default' | 'secondary' | 'ghost' | 'destructi
 };
 
 const sizeOverride: Record<Size, string> = {
-  sm: 'h-auto px-3 py-1.5 text-xs rounded-[3px]',
-  md: 'h-auto px-4 py-2 text-sm rounded-[4px]',
-  lg: 'h-auto px-5 py-2.5 text-sm rounded-[4px]',
+  sm: 'h-auto px-3 py-1.5 text-xs rounded-full',
+  md: 'h-auto px-4 py-2 text-sm rounded-full',
+  lg: 'h-auto px-5 py-2.5 text-sm rounded-full',
 };
 
 const shadSizeMap: Record<Size, 'sm' | 'default' | 'lg'> = {

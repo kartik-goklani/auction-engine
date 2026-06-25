@@ -31,7 +31,7 @@ export function NotificationDropdown() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-6 w-6 items-center justify-center rounded-[3px] border border-border-subtle bg-transparent text-text-muted transition-colors duration-150 hover:text-text-primary hover:bg-bg-elevated"
+        className="relative flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle bg-transparent text-text-muted transition-colors duration-150 hover:text-text-primary hover:bg-bg-elevated"
         aria-label="Notifications"
       >
         <Bell size={12} />

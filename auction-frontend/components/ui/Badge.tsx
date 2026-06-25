@@ -25,8 +25,8 @@ export const badgeVariants = cva(
         elevated: 'text-text-secondary bg-bg-tag border border-border-subtle',
       },
       size: {
-        sm: 'px-1.5 py-0.5 text-[9px] rounded-[2px]',
-        md: 'px-2 py-0.5 text-[10px] rounded-[2px]',
+        sm: 'px-1.5 py-0.5 text-[9px] rounded-full',
+        md: 'px-2 py-0.5 text-[10px] rounded-full',
       },
     },
     defaultVariants: {

@@ -95,7 +95,7 @@ export default function BuyerLayout({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-2">
               <Link
                 href="/buyer/auctions/new"
-                className="inline-flex items-center gap-1.5 bg-accent text-[#0A0A0A] text-xs font-semibold px-3 py-1.5 rounded-[4px] hover:bg-accent-hover transition-colors duration-150"
+                className="inline-flex items-center gap-1.5 bg-accent text-[#0A0A0A] text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-accent-hover transition-colors duration-150"
               >
                 <Plus size={12} strokeWidth={2.5} />
                 New Auction

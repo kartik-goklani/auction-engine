@@ -103,7 +103,7 @@ export default function AuditTrailPage() {
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link href={`/buyer/auctions/${id}`}>
-            <button type="button" className="p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+            <button type="button" className="p-1.5 rounded-full text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
               <ArrowLeft size={14} />
             </button>
           </Link>
