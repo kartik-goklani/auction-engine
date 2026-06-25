@@ -10,21 +10,17 @@ import { FormInput } from '@/components/ui/FormInput';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
-import { Modal } from '@/components/ui/Modal';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { PriceIntelligenceCard } from '@/components/agent/PriceIntelligenceCard';
 import { ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 
 const CONFIDENCE_BADGE_VARIANT: Record<ConfidenceLevel, 'success' | 'warning' | 'danger'> = {
   [ConfidenceLevel.HIGH]:   'success',
   [ConfidenceLevel.MEDIUM]: 'warning',
   [ConfidenceLevel.LOW]:    'danger',
 };
-import Link from 'next/link';
-
-// ── Category options ────────────────────────────────────────────────────────
 
 const CATEGORY_OPTIONS = [
   'Office Supplies',
@@ -41,14 +37,10 @@ const CATEGORY_OPTIONS = [
 
 const OTHER_VALUE = '__OTHER__';
 
-// ── Form state ──────────────────────────────────────────────────────────────
-
 interface FormState {
   title: string;
   description: string;
-  /** Value from the select — one of CATEGORY_OPTIONS or '__OTHER__' */
   categoryKey: string;
-  /** Free-text entered when categoryKey === '__OTHER__' */
   categoryCustom: string;
   quantity: string;
   unit: string;
@@ -59,16 +51,13 @@ interface FormState {
   visibility: AuctionVisibility;
   startTime: string;
   endTime: string;
-  // Paise values stored as rupee strings for input
   ceilingPriceRupees: string;
   minDecrementRupees: string;
   riskThresholdRupees: string;
   autoExtendTriggerMin: string;
   autoExtendMin: string;
-  // Reserve price
   reservePriceEnabled: boolean;
   reservePriceRupees: string;
-  // Traffic light
   trafficLightEnabled: boolean;
   trafficLightGreenPct: string;
   trafficLightYellowPct: string;
@@ -92,7 +81,6 @@ function rupeesToPaise(rupees: string): number {
   return Math.round(parseFloat(rupees) * 100);
 }
 
-/** Resolve the final category string from form state. */
 function resolveCategory(form: FormState): string {
   if (form.categoryKey === OTHER_VALUE) {
     return form.categoryCustom.trim()
@@ -102,9 +90,171 @@ function resolveCategory(form: FormState): string {
   return form.categoryKey;
 }
 
-/** Convert a datetime-local string (local time) to ISO UTC string. */
 function localToIso(local: string): string {
   return new Date(local).toISOString();
+}
+
+// ── AI Price Intelligence panel ─────────────────────────────────────────────
+
+interface PriceIntelligencePanelProps {
+  suggestion: PriceIntelligenceSuggestion | null;
+  loading: boolean;
+  isForward: boolean;
+  unit: string;
+  onGenerate: () => void;
+  onApply: (data: { openingPrice: number; minDecrement: number; riskThreshold?: number | null }) => void;
+  onRegenerate: () => void;
+}
+
+function PriceIntelligencePanel({
+  suggestion,
+  loading,
+  isForward,
+  unit,
+  onGenerate,
+  onApply,
+  onRegenerate,
+}: PriceIntelligencePanelProps) {
+  const acceptedSources = suggestion?.pricing_trace?.raw_candidates?.filter(
+    (c) => c.rejection_reason === null,
+  ) ?? [];
+  const sourceCount = suggestion?.evidence_breakdown?.web_match_count ?? acceptedSources.length;
+  const discountPct  = suggestion?.pricing_trace?.quantity_adjustment?.discount_pct ?? null;
+  const unitLabel    = unit.trim() || 'unit';
+
+  return (
+    <div className="rounded-[4px] border border-border-default bg-bg-card overflow-hidden">
+      {/* Header — always visible */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="size-7 rounded-full bg-accent/15 flex items-center justify-center shrink-0">
+            <Sparkles size={13} className="text-accent" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-text-primary">Price intelligence</p>
+            {sourceCount > 0 && (
+              <p className="text-[11px] text-text-muted leading-tight">
+                Agent · {sourceCount} sources analysed
+              </p>
+            )}
+          </div>
+        </div>
+        {suggestion && !loading && suggestion.confidence_level && (
+          <Badge variant={CONFIDENCE_BADGE_VARIANT[suggestion.confidence_level]} size="sm">
+            {suggestion.confidence_level} confidence
+          </Badge>
+        )}
+      </div>
+
+      {/* Idle */}
+      {!suggestion && !loading && (
+        <div className="border-t border-border-subtle px-4 py-4 flex flex-col gap-3">
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Fill in the title, category and quantity, then generate AI-suggested pricing based on live market data.
+          </p>
+          <Button type="button" variant="secondary" size="sm" onClick={onGenerate} className="self-start">
+            <Sparkles size={13} />
+            Generate Suggestions
+          </Button>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="border-t border-border-subtle px-4 py-4 flex items-center gap-2">
+          <Sparkles size={14} className="text-accent animate-amber-pulse shrink-0" />
+          <p className="text-xs text-text-secondary animate-pulse">Analysing current web pricing evidence…</p>
+        </div>
+      )}
+
+      {/* Loaded */}
+      {suggestion && !loading && (
+        <>
+          {/* Hero: big recommended price */}
+          <div className="border-t border-border-subtle px-4 pt-4 pb-3">
+            <p className="text-[10px] uppercase tracking-widest text-text-muted mb-1">
+              {isForward ? 'Recommended Floor' : 'Recommended Ceiling'}
+            </p>
+            <p className="font-mono text-2xl font-bold text-text-primary tracking-tight">
+              {suggestion.opening_price != null ? formatCurrency(suggestion.opening_price) : '—'}
+            </p>
+            {(suggestion.recommended_unit_price != null || discountPct != null) && (
+              <p className="text-xs text-success mt-1 flex items-center gap-1 flex-wrap">
+                {suggestion.recommended_unit_price != null && (
+                  <span>≈ {formatCurrency(suggestion.recommended_unit_price)} / {unitLabel}</span>
+                )}
+                {discountPct != null && discountPct > 0 && (
+                  <span>· {discountPct}% below market</span>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* Analysis summary */}
+          {suggestion.analysis_summary && (
+            <div className="border-t border-border-subtle px-4 py-3">
+              <p className="text-xs text-text-secondary leading-relaxed">
+                {suggestion.analysis_summary}
+              </p>
+            </div>
+          )}
+
+          {/* Evidence sources */}
+          {acceptedSources.length > 0 && (
+            <div className="border-t border-border-subtle px-4 py-3">
+              <p className="text-[10px] uppercase tracking-widest text-text-muted mb-2.5">
+                Evidence Sources
+              </p>
+              <div className="flex flex-col gap-2">
+                {acceptedSources.slice(0, 4).map((src, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="size-1.5 rounded-full bg-success shrink-0" />
+                      <span className="text-xs text-text-secondary truncate">{src.title}</span>
+                    </div>
+                    {src.per_unit_paise != null && (
+                      <span className="text-xs font-mono text-text-muted shrink-0">
+                        {formatCurrency(src.per_unit_paise)}/{unitLabel[0] ?? 'u'}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="border-t border-border-subtle px-4 py-3 flex flex-col gap-2">
+            {suggestion.opening_price != null && (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={() => onApply({
+                  openingPrice: suggestion.opening_price ?? 0,
+                  minDecrement: suggestion.suggested_decrement ?? 0,
+                  riskThreshold: suggestion.risk_threshold,
+                })}
+                className="w-full justify-center"
+              >
+                Apply to Pricing Rules
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onRegenerate}
+              className="w-full justify-center"
+            >
+              <RefreshCw size={13} />
+              Regenerate
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function NewAuctionPage() {
@@ -112,7 +262,6 @@ export default function NewAuctionPage() {
   const [form,        setForm]        = useState<FormState>(INITIAL);
   const [aiSuggestion, setAiSuggestion] = useState<PriceIntelligenceSuggestion | null>(null);
   const [aiLoading,   setAiLoading]   = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
   const [submitting,  setSubmitting]  = useState(false);
   const [error,       setError]       = useState('');
 
@@ -156,7 +305,6 @@ export default function NewAuctionPage() {
         type: form.auctionType,
       });
       setAiSuggestion(suggestion);
-      setShowAiModal(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'AI analysis failed. Fill in values manually.');
     } finally {
@@ -170,13 +318,10 @@ export default function NewAuctionPage() {
       minDecrementRupees:  (data.minDecrement  / 100).toFixed(2),
       riskThresholdRupees: '',
     };
-
     if (data.riskThreshold != null) {
       nextState.riskThresholdRupees = (data.riskThreshold / 100).toFixed(2);
     }
-
     patch(nextState);
-    setShowAiModal(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -252,7 +397,6 @@ export default function NewAuctionPage() {
         keySpecs: form.keySpecs.trim() || undefined,
         type:              form.auctionType,
         visibility:          form.visibility,
-        // Convert local datetime-local strings to UTC ISO strings (Bug 3 fix)
         startTime:         form.startTime ? localToIso(form.startTime) : form.startTime,
         endTime:           form.endTime   ? localToIso(form.endTime)   : form.endTime,
         ceilingPrice:         rupeesToPaise(form.ceilingPriceRupees),
@@ -275,11 +419,13 @@ export default function NewAuctionPage() {
     }
   }
 
+  const isForward = form.auctionType === AuctionType.FORWARD;
+
   return (
-    <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
+    <div className="max-w-5xl mx-auto w-full">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-1.5 rounded-[3px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
+      <div className="flex items-center gap-3 mb-6">
+        <Link href="/buyer/auctions" className="inline-flex items-center justify-center p-1.5 rounded-full text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors">
           <ArrowLeft size={14} />
         </Link>
         <div>
@@ -288,468 +434,369 @@ export default function NewAuctionPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        {/* Basic info */}
-        <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-4">Basic Details</h2>
-          <div className="flex flex-col gap-4">
-            <FormInput
-              label="Title"
-              value={form.title}
-              onChange={(e) => patch({ title: e.target.value })}
-              placeholder="e.g. Office Supplies Q3 2026"
-              required
-            />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Description</label>
-              <Textarea
-                value={form.description}
-                onChange={(e) => patch({ description: e.target.value })}
-                placeholder="What are you procuring?"
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <FormInput
-                label="Brand"
-                value={form.brandName}
-                onChange={(e) => patch({ brandName: e.target.value })}
-                placeholder="e.g. Apple"
-              />
-              <FormInput
-                label="Model"
-                value={form.modelNumber}
-                onChange={(e) => patch({ modelNumber: e.target.value })}
-                placeholder="e.g. Mac mini M4"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Key Specs</label>
-              <Textarea
-                value={form.keySpecs}
-                onChange={(e) => patch({ keySpecs: e.target.value })}
-                placeholder="e.g. 16GB RAM, 256GB SSD"
-                rows={2}
-              />
-            </div>
+      <form onSubmit={handleSubmit} className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
 
-            {/* Category dropdown */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
-                Category <span className="normal-case font-normal ml-0.5">— used by AI for price suggestions</span>
-              </label>
-              <Select
-                value={form.categoryKey}
-                onValueChange={(v) => { if (v) patch({ categoryKey: v, categoryCustom: '' }); }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a category…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                  <SelectItem value={OTHER_VALUE}>Other…</SelectItem>
-                </SelectContent>
-              </Select>
-              {form.categoryKey === OTHER_VALUE && (
-                <FormInput
-                  value={form.categoryCustom}
-                  onChange={(e) => patch({ categoryCustom: e.target.value })}
-                  placeholder="Enter custom category (optional)"
-                />
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormInput
-                label="Quantity"
-                type="number"
-                min={0}
-                step={1}
-                value={form.quantity}
-                onChange={(e) => patch({ quantity: e.target.value })}
-                placeholder="e.g. 50"
-                required
-              />
-              <FormInput
-                label="Unit"
-                value={form.unit}
-                onChange={(e) => patch({ unit: e.target.value })}
-                placeholder="e.g. laptops, licenses, kg"
-                required
-              />
-            </div>
-          </div>
-        </Card>
+        {/* ── LEFT COLUMN ─────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-5">
 
-        {/* Auction configuration */}
-        <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-4">Auction Configuration</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Auction Type</label>
-              <Select
-                value={form.auctionType}
-                onValueChange={(v) => { if (v) patch({ auctionType: v as AuctionType, ...(v === AuctionType.FORWARD ? { riskThresholdRupees: '' } : {}) }); }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={AuctionType.REVERSE}>Reverse (Price Down)</SelectItem>
-                  <SelectItem value={AuctionType.FORWARD}>Forward (Price Up)</SelectItem>
-                  <SelectItem value={AuctionType.SEALED_BID}>Sealed Bid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Visibility</label>
-              <Select
-                value={form.visibility}
-                onValueChange={(v) => { if (v) patch({ visibility: v as AuctionVisibility }); }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={AuctionVisibility.BLIND}>Blind (no info shown)</SelectItem>
-                  <SelectItem value={AuctionVisibility.RANK}>Rank Only</SelectItem>
-                  <SelectItem value={AuctionVisibility.PRICE}>Price Visible</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <FormInput
-              label="Start Time"
-              type="datetime-local"
-              value={form.startTime}
-              onChange={(e) => patch({ startTime: e.target.value })}
-              required
-            />
-            <FormInput
-              label="End Time"
-              type="datetime-local"
-              value={form.endTime}
-              onChange={(e) => patch({ endTime: e.target.value })}
-              required
-            />
-          </div>
-        </Card>
-
-        {/* AI Price Intelligence (Bug 2 — button only, suggestions shown in modal) */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text-primary">Pricing</h2>
-            {aiSuggestion && !aiLoading ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowAiModal(true)}
-                >
-                  <Sparkles size={13} />
-                  View AI Suggestions
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={triggerPriceIntelligence}
-                >
-                  Regenerate
-                </Button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                loading={aiLoading}
-                onClick={triggerPriceIntelligence}
-              >
-                <Sparkles size={13} />
-                AI Suggest
-              </Button>
-            )}
-          </div>
-
+          {/* Basic Details */}
           <Card>
-            <div className="grid grid-cols-2 gap-4">
+            <h2 className="text-sm font-semibold text-text-primary mb-4">Basic Details</h2>
+            <div className="flex flex-col gap-4">
               <FormInput
-                label={form.auctionType === AuctionType.FORWARD ? 'Floor Price (₹)' : 'Ceiling Price (₹)'}
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.ceilingPriceRupees}
-                onChange={(e) => patch({ ceilingPriceRupees: e.target.value })}
-                placeholder="0.00"
+                label="Title"
+                value={form.title}
+                onChange={(e) => patch({ title: e.target.value })}
+                placeholder="e.g. Office Supplies Q3 2026"
                 required
               />
-              <FormInput
-                label={form.auctionType === AuctionType.FORWARD ? 'Min Increment (₹)' : 'Min Decrement (₹)'}
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.minDecrementRupees}
-                onChange={(e) => patch({ minDecrementRupees: e.target.value })}
-                placeholder="0.00"
-                required
-              />
-              {form.auctionType !== AuctionType.FORWARD && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Description</label>
+                <Textarea
+                  value={form.description}
+                  onChange={(e) => patch({ description: e.target.value })}
+                  placeholder="What are you procuring?"
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <FormInput
-                  label="Risk Threshold (₹)"
+                  label="Brand"
+                  value={form.brandName}
+                  onChange={(e) => patch({ brandName: e.target.value })}
+                  placeholder="e.g. Apple"
+                />
+                <FormInput
+                  label="Model"
+                  value={form.modelNumber}
+                  onChange={(e) => patch({ modelNumber: e.target.value })}
+                  placeholder="e.g. Mac mini M4"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Key Specs</label>
+                <Textarea
+                  value={form.keySpecs}
+                  onChange={(e) => patch({ keySpecs: e.target.value })}
+                  placeholder="e.g. 16GB RAM, 256GB SSD"
+                  rows={2}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                  Category <span className="normal-case font-normal ml-0.5">— used by AI for price suggestions</span>
+                </label>
+                <Select
+                  value={form.categoryKey}
+                  onValueChange={(v) => { if (v) patch({ categoryKey: v, categoryCustom: '' }); }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a category…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                    <SelectItem value={OTHER_VALUE}>Other…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.categoryKey === OTHER_VALUE && (
+                  <FormInput
+                    value={form.categoryCustom}
+                    onChange={(e) => patch({ categoryCustom: e.target.value })}
+                    placeholder="Enter custom category (optional)"
+                  />
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormInput
+                  label="Quantity"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.quantity}
+                  onChange={(e) => patch({ quantity: e.target.value })}
+                  placeholder="e.g. 50"
+                  required
+                />
+                <FormInput
+                  label="Unit"
+                  value={form.unit}
+                  onChange={(e) => patch({ unit: e.target.value })}
+                  placeholder="e.g. laptops, licenses, kg"
+                  required
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Auction Configuration */}
+          <Card>
+            <h2 className="text-sm font-semibold text-text-primary mb-4">Auction Configuration</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Auction Type</label>
+                <Select
+                  value={form.auctionType}
+                  onValueChange={(v) => { if (v) patch({ auctionType: v as AuctionType, ...(v === AuctionType.FORWARD ? { riskThresholdRupees: '' } : {}) }); }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={AuctionType.REVERSE}>Reverse (Price Down)</SelectItem>
+                    <SelectItem value={AuctionType.FORWARD}>Forward (Price Up)</SelectItem>
+                    <SelectItem value={AuctionType.SEALED_BID}>Sealed Bid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Visibility</label>
+                <Select
+                  value={form.visibility}
+                  onValueChange={(v) => { if (v) patch({ visibility: v as AuctionVisibility }); }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={AuctionVisibility.BLIND}>Blind (no info shown)</SelectItem>
+                    <SelectItem value={AuctionVisibility.RANK}>Rank Only</SelectItem>
+                    <SelectItem value={AuctionVisibility.PRICE}>Price Visible</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <FormInput
+                label="Start Time"
+                type="datetime-local"
+                value={form.startTime}
+                onChange={(e) => patch({ startTime: e.target.value })}
+                required
+              />
+              <FormInput
+                label="End Time"
+                type="datetime-local"
+                value={form.endTime}
+                onChange={(e) => patch({ endTime: e.target.value })}
+                required
+              />
+            </div>
+          </Card>
+
+          {/* Reserve Price */}
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-text-primary">Reserve Price</h2>
+                <p className="text-xs text-text-muted mt-0.5">Minimum acceptable bid. Never shown to suppliers.</p>
+              </div>
+              <Switch
+                checked={form.reservePriceEnabled}
+                onCheckedChange={(checked) => patch({ reservePriceEnabled: checked, reservePriceRupees: '' })}
+              />
+            </div>
+
+            {form.reservePriceEnabled && (
+              <div className="mt-4 flex flex-col gap-2">
+                <FormInput
+                  label="Reserve Price (₹)"
                   type="number"
                   min={0}
                   step={0.01}
-                  value={form.riskThresholdRupees}
-                  onChange={(e) => patch({ riskThresholdRupees: e.target.value })}
+                  value={form.reservePriceRupees}
+                  onChange={(e) => patch({ reservePriceRupees: e.target.value })}
                   placeholder="0.00"
-                  hint="Bids below this trigger anomaly detection"
+                  hint={
+                    isForward
+                      ? 'Minimum price the buyer will accept — bids below this trigger reserve not met'
+                      : 'Maximum price the buyer will award at — bids above this trigger reserve not met'
+                  }
+                  required
                 />
-              )}
+              </div>
+            )}
 
+            {/* AI reserve hint */}
+            {aiSuggestion?.suggested_reserve_price != null && aiSuggestion.reserve_confidence != null && (
+              <div className={`flex items-center gap-2 ${form.reservePriceEnabled ? 'mt-2' : 'mt-3'}`}>
+                <span className="text-xs text-text-muted">
+                  AI suggests: {formatCurrency(aiSuggestion.suggested_reserve_price)}
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-accent hover:underline"
+                  onClick={() => patch({
+                    reservePriceEnabled: true,
+                    reservePriceRupees: (aiSuggestion.suggested_reserve_price! / 100).toFixed(2),
+                  })}
+                >
+                  Use this
+                </button>
+              </div>
+            )}
+            {aiSuggestion?.reserve_confidence === null &&
+              aiSuggestion?.reserve_price_basis === 'insufficient_evidence' && (
+              <p className="text-xs text-warning mt-2">
+                Insufficient data to suggest a reserve price. Set manually.
+              </p>
+            )}
+          </Card>
+
+          {/* Competitiveness Signal — not shown for SEALED_BID */}
+          {form.auctionType !== AuctionType.SEALED_BID && (
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-text-primary">Competitiveness Signal</h2>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Show suppliers a colour signal after each bid — without revealing the actual price
+                  </p>
+                </div>
+                <Switch
+                  checked={form.trafficLightEnabled}
+                  onCheckedChange={(checked) => patch({ trafficLightEnabled: checked })}
+                />
+              </div>
+
+              {form.trafficLightEnabled && (
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormInput
+                      label="Green threshold (%)"
+                      type="number"
+                      min={1}
+                      max={50}
+                      step={1}
+                      value={form.trafficLightGreenPct}
+                      onChange={(e) => patch({ trafficLightGreenPct: e.target.value })}
+                      hint="Vendor is within this % of best price"
+                    />
+                    <FormInput
+                      label="Yellow threshold (%)"
+                      type="number"
+                      min={2}
+                      max={99}
+                      step={1}
+                      value={form.trafficLightYellowPct}
+                      onChange={(e) => patch({ trafficLightYellowPct: e.target.value })}
+                      hint="Must be greater than green threshold"
+                    />
+                  </div>
+                  <div className="flex items-center gap-4 rounded-[4px] border border-border-subtle bg-bg-elevated px-4 py-2.5 text-xs">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                      <span className="text-success font-medium">Competitive</span>
+                      <span className="text-text-muted ml-1">within {form.trafficLightGreenPct || '?'}%</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-warning" />
+                      <span className="text-warning font-medium">Marginal</span>
+                      <span className="text-text-muted ml-1">{form.trafficLightGreenPct || '?'}–{form.trafficLightYellowPct || '?'}%</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-danger" />
+                      <span className="text-danger font-medium">Not competitive</span>
+                      <span className="text-text-muted ml-1">above {form.trafficLightYellowPct || '?'}%</span>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Auto-Extension */}
+          <Card>
+            <h2 className="text-sm font-semibold text-text-primary mb-4">Auto-Extension</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput
+                label="Trigger Window (min)"
+                type="number"
+                min={1}
+                value={form.autoExtendTriggerMin}
+                onChange={(e) => patch({ autoExtendTriggerMin: e.target.value })}
+                hint="Extend if bid arrives within N min of end"
+              />
+              <FormInput
+                label="Extension Duration (min)"
+                type="number"
+                min={1}
+                value={form.autoExtendMin}
+                onChange={(e) => patch({ autoExtendMin: e.target.value })}
+                hint="How many minutes to add"
+              />
             </div>
           </Card>
+
+          {error && (
+            <p className="text-xs text-danger bg-danger/8 border border-danger/25 rounded-[4px] px-4 py-2.5">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center gap-3 justify-end">
+            <Link href="/buyer/auctions">
+              <Button type="button" variant="secondary" size="md">Cancel</Button>
+            </Link>
+            <Button type="submit" variant="default" size="md" loading={submitting}>
+              Create Auction
+            </Button>
+          </div>
         </div>
 
-        {/* Reserve Price */}
-        <Card>
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-text-primary">Reserve Price</h2>
-              <p className="text-xs text-text-muted mt-0.5">Minimum acceptable bid. Never shown to suppliers.</p>
-            </div>
-            <Switch
-              checked={form.reservePriceEnabled}
-              onCheckedChange={(checked) => patch({ reservePriceEnabled: checked, reservePriceRupees: '' })}
-            />
-          </div>
+        {/* ── RIGHT COLUMN (sticky) ────────────────────────────────────── */}
+        <div className="flex flex-col gap-4 lg:sticky lg:top-6">
 
-          {form.reservePriceEnabled && (
-            <div className="mt-4 flex flex-col gap-2">
+          {/* Amber Pricing Rules card */}
+          <div className="rounded-[4px] border border-l-2 border-border-subtle border-l-accent bg-accent/[0.04] p-4 flex flex-col gap-4">
+            <h2 className="text-[11px] font-semibold uppercase tracking-widest text-accent">
+              Pricing Rules
+            </h2>
+            <FormInput
+              label={isForward ? 'Floor Price (₹)' : 'Ceiling Price (₹)'}
+              type="number"
+              min={0}
+              step={0.01}
+              value={form.ceilingPriceRupees}
+              onChange={(e) => patch({ ceilingPriceRupees: e.target.value })}
+              placeholder="0.00"
+              required
+            />
+            <FormInput
+              label={isForward ? 'Min Increment (₹)' : 'Min Decrement (₹)'}
+              type="number"
+              min={0}
+              step={0.01}
+              value={form.minDecrementRupees}
+              onChange={(e) => patch({ minDecrementRupees: e.target.value })}
+              placeholder="0.00"
+              required
+            />
+            {form.auctionType !== AuctionType.FORWARD && (
               <FormInput
-                label={`Reserve Price (₹)`}
+                label="Risk Threshold (₹)"
                 type="number"
                 min={0}
                 step={0.01}
-                value={form.reservePriceRupees}
-                onChange={(e) => patch({ reservePriceRupees: e.target.value })}
+                value={form.riskThresholdRupees}
+                onChange={(e) => patch({ riskThresholdRupees: e.target.value })}
                 placeholder="0.00"
-                hint={
-                  form.auctionType === AuctionType.FORWARD
-                    ? 'Minimum price the buyer will accept — bids below this trigger reserve not met'
-                    : 'Maximum price the buyer will award at — bids above this trigger reserve not met'
-                }
-                required
+                hint="Bids below this trigger anomaly detection"
               />
-              {aiSuggestion?.suggested_reserve_price != null && aiSuggestion.reserve_confidence != null && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-text-muted">
-                    AI suggests: {formatCurrency(aiSuggestion.suggested_reserve_price)}
-                  </span>
-                  <button
-                    type="button"
-                    className="text-xs text-accent hover:underline"
-                    onClick={() => patch({
-                      reservePriceEnabled: true,
-                      // Agent output is in paise; form stores rupees
-                      reservePriceRupees: (aiSuggestion.suggested_reserve_price! / 100).toFixed(2),
-                    })}
-                  >
-                    Use this
-                  </button>
-                </div>
-              )}
-              {aiSuggestion?.reserve_confidence === null &&
-                aiSuggestion?.reserve_price_basis === 'insufficient_evidence' && (
-                <p className="text-xs text-warning">
-                  Insufficient data to suggest a reserve price. Set manually.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Show AI reserve hint when toggle is off */}
-          {!form.reservePriceEnabled &&
-            aiSuggestion?.suggested_reserve_price != null &&
-            aiSuggestion.reserve_confidence != null && (
-            <div className="mt-3 flex items-center gap-2">
-              <span className="text-xs text-text-muted">
-                AI suggests a reserve price of {formatCurrency(aiSuggestion.suggested_reserve_price)}
-              </span>
-              <button
-                type="button"
-                className="text-xs text-accent hover:underline"
-                onClick={() => patch({
-                  reservePriceEnabled: true,
-                  reservePriceRupees: (aiSuggestion.suggested_reserve_price! / 100).toFixed(2),
-                })}
-              >
-                Use this
-              </button>
-            </div>
-          )}
-        </Card>
-
-        {/* Traffic Light Config — not shown for SEALED_BID (signals are always DISABLED there) */}
-        {form.auctionType !== AuctionType.SEALED_BID && (
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold text-text-primary">Competitiveness Signal</h2>
-                <p className="text-xs text-text-muted mt-0.5">
-                  Show suppliers a colour signal after each bid — without revealing the actual price
-                </p>
-              </div>
-              <Switch
-                checked={form.trafficLightEnabled}
-                onCheckedChange={(checked) => patch({ trafficLightEnabled: checked })}
-              />
-            </div>
-
-            {form.trafficLightEnabled && (
-              <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormInput
-                    label="Green threshold (%)"
-                    type="number"
-                    min={1}
-                    max={50}
-                    step={1}
-                    value={form.trafficLightGreenPct}
-                    onChange={(e) => patch({ trafficLightGreenPct: e.target.value })}
-                    hint="Vendor is within this % of best price"
-                  />
-                  <FormInput
-                    label="Yellow threshold (%)"
-                    type="number"
-                    min={2}
-                    max={99}
-                    step={1}
-                    value={form.trafficLightYellowPct}
-                    onChange={(e) => patch({ trafficLightYellowPct: e.target.value })}
-                    hint="Must be greater than green threshold"
-                  />
-                </div>
-
-                {/* Live preview */}
-                <div className="flex items-center gap-4 rounded-[4px] border border-border-subtle bg-bg-elevated px-4 py-2.5 text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                    <span className="text-success font-medium">Competitive</span>
-                    <span className="text-text-muted ml-1">within {form.trafficLightGreenPct || '?'}%</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-warning" />
-                    <span className="text-warning font-medium">Marginal</span>
-                    <span className="text-text-muted ml-1">{form.trafficLightGreenPct || '?'}–{form.trafficLightYellowPct || '?'}%</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-danger" />
-                    <span className="text-danger font-medium">Not competitive</span>
-                    <span className="text-text-muted ml-1">above {form.trafficLightYellowPct || '?'}%</span>
-                  </span>
-                </div>
-              </div>
             )}
-          </Card>
-        )}
-
-        {/* Auto-extension */}
-        <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-4">Auto-Extension</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <FormInput
-              label="Trigger Window (min)"
-              type="number"
-              min={1}
-              value={form.autoExtendTriggerMin}
-              onChange={(e) => patch({ autoExtendTriggerMin: e.target.value })}
-              hint="Extend if bid arrives within N min of end"
-            />
-            <FormInput
-              label="Extension Duration (min)"
-              type="number"
-              min={1}
-              value={form.autoExtendMin}
-              onChange={(e) => patch({ autoExtendMin: e.target.value })}
-              hint="How many minutes to add"
-            />
           </div>
-        </Card>
 
-        {error && (
-          <p className="text-xs text-danger bg-danger/8 border border-danger/25 rounded-[4px] px-4 py-2.5">
-            {error}
-          </p>
-        )}
-
-        <div className="flex items-center gap-3 justify-end">
-          <Link href="/buyer/auctions">
-            <Button type="button" variant="secondary" size="md">Cancel</Button>
-          </Link>
-          <Button type="submit" variant="default" size="md" loading={submitting}>
-            Create Auction
-          </Button>
+          {/* AI Price Intelligence panel */}
+          <PriceIntelligencePanel
+            suggestion={aiSuggestion}
+            loading={aiLoading}
+            isForward={isForward}
+            unit={form.unit}
+            onGenerate={triggerPriceIntelligence}
+            onApply={applyAiSuggestions}
+            onRegenerate={() => { setAiSuggestion(null); void triggerPriceIntelligence(); }}
+          />
         </div>
       </form>
-
-      {/* AI suggestions modal */}
-      <Modal
-        open={showAiModal}
-        onClose={() => setShowAiModal(false)}
-        title="AI Price Suggestions"
-        size="lg"
-        disableBackdropClose
-      >
-        {/* Compact subheader: category · confidence badge · regenerate */}
-        <div className="-mt-2 mb-1 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-text-muted">{resolveCategory(form)}</span>
-          {aiSuggestion?.confidence_level && (
-            <Badge variant={CONFIDENCE_BADGE_VARIANT[aiSuggestion.confidence_level]} size="sm">
-              {aiSuggestion.confidence_level} Confidence
-            </Badge>
-          )}
-          <button
-            type="button"
-            title="Regenerate suggestions"
-            onClick={() => { setShowAiModal(false); void triggerPriceIntelligence(); }}
-            className="ml-auto text-text-muted hover:text-text-secondary transition-colors"
-          >
-            <RefreshCw size={13} />
-          </button>
-        </div>
-
-        {/* Flat card — modal is the visual container */}
-        <PriceIntelligenceCard
-          metadata={aiSuggestion}
-          auctionType={form.auctionType}
-          loading={false}
-          onApply={applyAiSuggestions}
-          summary={aiSuggestion?.analysis_summary ?? null}
-          flat
-        />
-
-        {/* Unified footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-3">
-          <Button variant="secondary" size="sm" onClick={() => setShowAiModal(false)}>
-            Dismiss
-          </Button>
-          {aiSuggestion?.opening_price != null && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => applyAiSuggestions({
-                openingPrice: aiSuggestion.opening_price ?? 0,
-                minDecrement: aiSuggestion.suggested_decrement ?? 0,
-                riskThreshold: aiSuggestion.risk_threshold,
-              })}
-            >
-              Apply Suggestions
-            </Button>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }
